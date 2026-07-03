@@ -24,10 +24,9 @@ ais start  →  background daemon polls your quota every N hours
 ## Requirements
 
 - **macOS** (Keychain, notifications, and Finder integration are macOS-specific)
+- **Python 3** — already bundled with macOS at `/usr/bin/python3`; nothing to install. Verify with `python3 --version` (3.9+). On a brand-new Mac the first run may prompt to install the Command Line Tools — click *Install*, or run `xcode-select --install`. **No `pip install` and no third-party packages** — standard library only.
 - **Claude Code** installed and logged in with a Claude subscription (Pro/Max)
 - *(optional)* `brew install terminal-notifier` — enables click-to-open-session notifications
-
-No `pip install` needed — standard library only, works on macOS's bundled Python 3.9+.
 
 ## Install
 
