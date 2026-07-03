@@ -1,0 +1,223 @@
+"""간단한 ko/en 다국어 지원.
+
+언어 결정 우선순위: AIS_LANG 환경변수 > LC_ALL/LC_MESSAGES/LANG > macOS 시스템 언어 > en
+"""
+import os
+
+
+def _detect() -> str:
+    for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        v = os.environ.get(var, "")
+        if v:
+            return "ko" if v.lower().startswith("ko") else "en"
+    try:  # GUI/데몬 컨텍스트 폴백: macOS 시스템 언어
+        import subprocess
+        r = subprocess.run(["defaults", "read", "-g", "AppleLocale"],
+                           capture_output=True, text=True, timeout=3)
+        if r.stdout.strip().lower().startswith("ko"):
+            return "ko"
+    except Exception:
+        pass
+    return "en"
+
+
+LANG = (os.environ.get("AIS_LANG") or _detect()).lower()
+LANG = "ko" if LANG.startswith("ko") else "en"
+_I = 0 if LANG == "ko" else 1
+
+DAYS = (
+    ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"],
+    ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+)
+
+
+def day_name(idx: int) -> str:
+    return DAYS[_I][idx]
+
+
+M = {
+    # ---- wizard ----
+    "w.title": ("=== 작업 예약 ===", "=== Schedule a Task ==="),
+    "w.mode.q": ("어떤 기준으로 예약할까요?", "When should this task run?"),
+    "w.mode.5h": ("5시간 할당량 기반 — 잔여량이 충분하고 리셋 시간이 가까워지면 실행",
+                  "5-hour quota — run when enough quota remains and the reset is near"),
+    "w.mode.weekly": ("위클리 할당량 기반 — 잔여량이 충분한 특정 요일/시간에 실행",
+                      "Weekly quota — run on a specific day/time if enough quota remains"),
+    "w.ask.remain5": ("5시간 할당량이 몇 % 이상 남았을 때 실행할까요? (0-100): ",
+                      "Run when at least what % of the 5-hour quota remains? (0-100): "),
+    "w.ask.before": ("리셋 몇 시간 전부터 실행할까요? (0-5): ",
+                     "Start how many hours before the reset? (0-5): "),
+    "w.ask.remainw": ("위클리 할당량이 몇 % 이상 남았을 때 실행할까요? (0-100): ",
+                      "Run when at least what % of the weekly quota remains? (0-100): "),
+    "w.ask.weekday": ("무슨 요일에 실행할까요?", "Which day of the week?"),
+    "w.ask.time": ("몇 시에 실행할까요? (HH:MM, 예: 09:00): ", "At what time? (HH:MM, e.g. 09:00): "),
+    "w.err.time": ("HH:MM 형식으로 입력해주세요. (예: 09:00)", "Please use HH:MM format (e.g. 09:00)."),
+    "w.ask.dir": ("어떤 폴더에서 작업할까요? (예: /Users/you/project): ",
+                  "Working folder? (e.g. /Users/you/project): "),
+    "w.ask.mkdir": ("'{path}' 경로가 없습니다. 새로 만들까요?", "'{path}' does not exist. Create it?"),
+    "w.err.notdir": ("디렉토리가 아닙니다. 다시 입력해주세요.", "Not a directory. Try again."),
+    "w.ask.adddirs": ("추가로 접근할 폴더가 있나요? (쉼표로 구분, 엔터 = 없음): ",
+                      "Additional folders to allow access? (comma-separated, Enter = none): "),
+    "w.skip.missing": ("  (무시됨 — 존재하지 않는 폴더: {p})", "  (ignored — folder does not exist: {p})"),
+    "w.ask.prompt": ("무슨 작업을 할까요? (Claude에게 보낼 지시): ",
+                     "What should Claude do? (instruction to send): "),
+    "w.err.empty": ("내용을 입력해주세요.", "Please enter something."),
+    "w.ask.model": ("어떤 모델로 실행할까요?", "Which model should run this?"),
+    "w.model.default": ("기본 모델 — 현재 Claude Code 설정을 그대로 사용",
+                        "Default — use your current Claude Code setting"),
+    "w.model.fable": ("Fable — 최상위 모델, 토큰 소비 최대 (가장 어려운 작업)",
+                      "Fable — top-tier model, highest token use (hardest tasks)"),
+    "w.model.opus": ("Opus — 가장 강력, 토큰 소비 큼 (복잡한 코드 작업)",
+                     "Opus — most capable, heavy token use (complex coding)"),
+    "w.model.sonnet": ("Sonnet — 성능/비용 균형 (대부분의 자동화 작업에 적합)",
+                       "Sonnet — balanced (good for most automation)"),
+    "w.model.haiku": ("Haiku — 가장 가볍고 빠름, 토큰 절약 (단순 확인/요약)",
+                      "Haiku — lightest & fastest, saves tokens (checks/summaries)"),
+    "w.ask.effort": ("추론 강도(effort)를 선택하세요", "Choose the reasoning effort"),
+    "w.effort.default": ("기본 — 현재 Claude Code 설정을 그대로 사용", "Default — use your current Claude Code setting"),
+    "w.effort.low": ("low — 추론 최소, 토큰 절약 (단순·기계적 작업)", "low — minimal reasoning, saves tokens (simple/mechanical)"),
+    "w.effort.medium": ("medium — 가벼운 추론", "medium — light reasoning"),
+    "w.effort.high": ("high — 깊은 추론", "high — deep reasoning"),
+    "w.effort.xhigh": ("xhigh — 매우 깊은 추론", "xhigh — very deep reasoning"),
+    "w.effort.max": ("max — 최대 추론, 토큰 소비 큼 (가장 어려운 작업)", "max — maximum reasoning, heavy token use (hardest tasks)"),
+    "w.ask.budget": ("작업당 최대 예산을 설정하세요 (달러, 엔터 = 제한 없음): ",
+                     "Max budget per run? ($, Enter = no limit): "),
+    "w.err.budget": ("0보다 큰 숫자로 입력하거나, 제한 없음은 그냥 엔터를 눌러주세요.",
+                     "Enter a number greater than 0, or press Enter for no limit."),
+    "w.done": ("=== 예약 완료 ===", "=== Task Scheduled ==="),
+    "w.hint.list": ("예약 목록은 `ais list` 로 언제든 확인할 수 있습니다.",
+                    "Check your schedule anytime with `ais list`."),
+    "w.yn": ("y 또는 n으로 답해주세요.", "Please answer y or n."),
+    "w.num": ("숫자로 입력해주세요.", "Please enter a number."),
+    "w.range": ("{lo}~{hi} 범위로 입력해주세요.", "Please enter a value between {lo} and {hi}."),
+    # ---- format_task ----
+    "f.dir": ("    작업폴더: {v}", "    Folder: {v}"),
+    "f.adddirs": ("    추가 접근: {v}", "    Also accesses: {v}"),
+    "f.cond5": ("    예약 조건: 5시간 잔여 {p:g}% 이상 + 리셋 {h:g}시간 전부터",
+                "    Condition: ≥{p:g}% of 5-hour quota + within {h:g}h of reset"),
+    "f.condw": ("    예약 조건: 위클리 잔여 {p:g}% 이상 + 매주 {d} {t}",
+                "    Condition: ≥{p:g}% of weekly quota + every {d} {t}"),
+    "f.model": ("    실행 모델: {v}", "    Model: {v}"),
+    "f.model.default": ("기본 (Claude Code 설정)", "default (Claude Code setting)"),
+    "f.effort": ("    추론 강도: {v}", "    Effort: {v}"),
+    "f.budget": ("    실행 한도: ${v:g} (초과 시 자동 중단)", "    Budget: ${v:g} (auto-stops if exceeded)"),
+    "f.budget.none": ("    실행 한도: 없음 (무제한)", "    Budget: none (unlimited)"),
+    "f.session": ("    최근 세션: {v}", "    Last session: {v}"),
+    "f.session.none": ("(없음)", "(none)"),
+    # ---- runner ----
+    "r.header": ("[사용량] 5시간 잔여 {p5:.0f}% (리셋 {t5}) / 위클리 잔여 {p7:.0f}% (리셋 {t7})",
+                 "[Usage] 5-hour {p5:.0f}% left (resets {t5}) / weekly {p7:.0f}% left (resets {t7})"),
+    "r.notasks": ("등록된 작업이 없습니다.", "No tasks scheduled."),
+    "r.cond.unset": ("조건 미설정", "no condition set"),
+    "r.skip.unset": ("  - 조건 미설정 (건너뜀)", "  - no condition set (skipped)"),
+    "r.5h.fired": ("이번 5시간 윈도우는 이미 실행함", "already ran in this 5-hour window"),
+    "r.5h.low": ("5시간 잔여 {r:.0f}% < 조건 {m}%", "5-hour {r:.0f}% left < required {m}%"),
+    "r.5h.past": ("이미 리셋된 윈도우", "window already reset"),
+    "r.5h.early": ("리셋까지 {h:.1f}시간 남음 (조건: {b}시간 전부터)",
+                   "{h:.1f}h until reset (starts within {b}h of reset)"),
+    "r.5h.met": ("5시간 잔여 {r:.0f}%, 리셋까지 {h:.1f}시간 → 조건 충족",
+                 "5-hour {r:.0f}% left, {h:.1f}h to reset → condition met"),
+    "r.w.fired": ("이번 주는 이미 실행함", "already ran this week"),
+    "r.w.day": ("오늘은 대상 요일 아님 (대상: {d})", "not the target day (target: {d})"),
+    "r.w.early": ("아직 실행 시각 전 (대상 {t}, 현재 {n})", "before scheduled time (target {t}, now {n})"),
+    "r.w.low": ("위클리 잔여 {r:.0f}% < 조건 {m}%", "weekly {r:.0f}% left < required {m}%"),
+    "r.w.met": ("위클리 잔여 {r:.0f}%, {d} {t} 슬롯 → 조건 충족",
+                "weekly {r:.0f}% left, {d} {t} slot → condition met"),
+    "r.label.5h": ("5시간 기준", "5-hour check"),
+    "r.label.w": ("위클리 기준", "weekly check"),
+    "r.label.none": ("조건", "condition"),
+    "r.exec": ("  → 실행 중... (cwd={d}, 모델 {m}, 예산 한도 {b})",
+               "  → Running... (cwd={d}, model {m}, budget {b})"),
+    "r.default": ("기본", "default"),
+    "r.none": ("없음", "none"),
+    "r.timeout": ("  ✗ 타임아웃", "  ✗ Timed out"),
+    "r.timeout.short": ("타임아웃", "timed out"),
+    "r.parsefail": ("  ✗ 실행 실패 (JSON 파싱 불가). stderr: {e}", "  ✗ Run failed (invalid JSON). stderr: {e}"),
+    "r.fail.short": ("실행 실패", "run failed"),
+    "r.budget": ("  ⛔ 예산 초과로 중단됨 (사용 ${c:.4f} / 한도 ${b:g}, 세션 {s})",
+                 "  ⛔ Stopped: budget exceeded (spent ${c:.4f} / limit ${b:g}, session {s})"),
+    "r.error": ("  ✗ 실행 에러: {e}", "  ✗ Run error: {e}"),
+    "r.done": ("  ✓ 완료 (세션 {s}, 비용 ${c:.4f})", "  ✓ Done (session {s}, cost ${c:.4f})"),
+    "r.result": ("    결과: {r}", "    Result: {r}"),
+    "r.usagefail": ("사용량 조회 실패: {e}", "Failed to fetch usage: {e}"),
+    "r.session.reset": ("  ↺ 이전 세션을 찾을 수 없어 세션 참조를 초기화했습니다 (다음 실행은 새 세션으로 시작)",
+                        "  ↺ Previous session not found — cleared the reference (next run starts fresh)"),
+    # ---- notify ----
+    "n.start": ("작업 시작", "Task started"),
+    "n.done": ("작업 완료 — 클릭하면 세션 열기", "Task done — click to open the session"),
+    "n.budget": ("예산 초과로 중단 — 클릭하면 세션 확인", "Budget exceeded — click to inspect"),
+    "n.budget.msg": ("{p} (${c:.2f} / 한도 ${b:g})", "{p} (${c:.2f} / limit ${b:g})"),
+    "n.done.msg": ("{p} (비용 ${c:.2f})", "{p} (cost ${c:.2f})"),
+    "n.fail": ("작업 실패", "Task failed"),
+    # ---- daemon ----
+    "d.on": ("✅ 자동 실행 켜짐 — {h:g}시간 간격으로 조건을 확인합니다. (pid {p})",
+             "✅ Auto-run ON — checking every {h:g}h (pid {p})"),
+    "d.first": ("   첫 확인은 지금 바로 1회 실행됩니다.", "   The first check runs right now."),
+    "d.dash": ("   📊 대시보드:  http://localhost:8787  (열기: ais ui)",
+               "   📊 Dashboard:  http://localhost:8787  (open: ais ui)"),
+    "d.status": ("   상태 확인: ais status", "   Status: ais status"),
+    "d.stopcmd": ("   끄기:      ais stop", "   Stop:   ais stop"),
+    "d.reboot": ("   ⚠️ 맥을 재시작하면 start를 다시 실행해야 합니다.", "   ⚠️ After a reboot, run start again."),
+    "d.already": ("이미 실행 중입니다 (pid {p}). 재시작하려면 먼저: ais stop",
+                  "Already running (pid {p}). To restart, run ais stop first."),
+    "d.off": ("🛑 자동 실행 꺼짐 (pid {p} 종료).", "🛑 Auto-run OFF (pid {p} terminated)."),
+    "d.notrunning": ("자동 실행이 켜져있지 않습니다.", "Auto-run is not on."),
+    "d.st.on": ("🟢 자동 실행: 켜짐 (pid {p})", "🟢 Auto-run: ON (pid {p})"),
+    "d.st.off": ("⚪ 자동 실행: 꺼짐 (켜기: ais start --hours 1)", "⚪ Auto-run: OFF (start: ais start --hours 1)"),
+    "d.log": ("--- 최근 로그 (마지막 15줄) ---", "--- Recent log (last 15 lines) ---"),
+    "d.web.fail": ("[web] 대시보드 서버 시작 실패 (포트 {p}): {e}", "[web] Dashboard server failed to start (port {p}): {e}"),
+    "d.web.on": ("[web] 대시보드: http://localhost:{p}", "[web] Dashboard: http://localhost:{p}"),
+    "d.loop.err": ("[run-loop 오류] {e}", "[run-loop error] {e}"),
+    # ---- ui.py ----
+    "u.hint": ("  (↑/↓ 이동, 엔터 또는 스페이스로 선택)", "  (↑/↓ to move, Enter or Space to select)"),
+    "u.choose": ("선택 (1-{n}): ", "Choose (1-{n}): "),
+    "u.choosenum": ("번호로 입력해주세요.", "Please enter a number."),
+    # ---- scheduler CLI ----
+    "s.desc": ("Claude Code 토큰 기반 작업 스케줄러", "Quota-aware task scheduler for Claude Code"),
+    "s.h.add": ("작업 등록 (인자 없으면 대화형, --prompt 지정 시 비대화형)",
+                "Schedule a task (interactive without args, non-interactive with --prompt)"),
+    "s.h.list": ("등록된 작업 목록", "List scheduled tasks"),
+    "s.h.runonce": ("조건 확인 후 충족된 작업 실행 (1회)", "Check conditions once and run eligible tasks"),
+    "s.h.usage": ("현재 5시간/위클리 사용량 조회", "Show current 5-hour/weekly usage"),
+    "s.h.start": ("자동 실행 켜기 (N시간 간격으로 조건 확인)", "Turn on auto-run (check every N hours)"),
+    "s.h.hours": ("확인 주기(시간), 기본 1시간", "Check interval in hours (default 1)"),
+    "s.h.stop": ("자동 실행 끄기", "Turn off auto-run"),
+    "s.h.status": ("자동 실행 상태와 최근 로그 확인", "Show auto-run status and recent log"),
+    "s.h.remove": ("작업 삭제", "Remove a task"),
+    "s.h.web": ("대시보드 서버만 포그라운드로 실행 (개발용, 데몬에는 내장됨)",
+                "Run only the dashboard server in foreground (dev; the daemon embeds it)"),
+    "s.h.ui": ("브라우저에서 대시보드 열기", "Open the dashboard in a browser"),
+    "s.err.weeklyneeds": ("위클리 예약에는 --day, --time 이 모두 필요합니다.",
+                          "Weekly schedules need both --day and --time."),
+    "s.err.day": ("인식할 수 없는 요일: {d} (월~일 또는 mon~sun)", "Unrecognized day: {d} (use mon~sun)"),
+    "s.err.time": ("시각은 HH:MM 형식이어야 합니다: {t}", "Time must be HH:MM: {t}"),
+    "s.err.onecond": ("조건은 정확히 하나만: --five-hour-remaining 또는 --weekly-remaining",
+                      "Exactly one condition: --five-hour-remaining or --weekly-remaining"),
+    "s.err.dirreq": ("--dir (작업폴더) 가 필요합니다.", "--dir (working folder) is required."),
+    "s.err.dir": ("작업폴더가 존재하지 않습니다: {d}", "Working folder does not exist: {d}"),
+    "s.err.adddir": ("추가 폴더가 존재하지 않습니다: {d}", "Additional folder does not exist: {d}"),
+    "s.usage.5h": ("5시간: 사용 {u:.0f}% / 잔여 {r:.0f}% (리셋 {t})", "5-hour: used {u:.0f}% / left {r:.0f}% (resets {t})"),
+    "s.usage.7d": ("위클리: 사용 {u:.0f}% / 잔여 {r:.0f}% (리셋 {t})", "Weekly: used {u:.0f}% / left {r:.0f}% (resets {t})"),
+    "s.removed": ("삭제됨: {id}", "Removed: {id}"),
+    "s.notfound": ("해당 id를 찾을 수 없습니다: {id}", "No such id: {id}"),
+    "s.nolist": ("등록된 예약이 없습니다.", "No scheduled tasks."),
+    "s.listtitle": ("=== 예약 목록 ({n}건) ===", "=== Scheduled tasks ({n}) ==="),
+    "s.web": ("대시보드: http://localhost:{p} (Ctrl+C로 종료)", "Dashboard: http://localhost:{p} (Ctrl+C to quit)"),
+    "s.ui": ("대시보드를 브라우저에서 엽니다. (데몬이 꺼져있으면 접속되지 않습니다 — start 먼저)",
+             "Opening the dashboard. (If the daemon is off it won't load — run start first.)"),
+    # ---- web API ----
+    "a.err.prompt": ("작업 내용(prompt)을 입력해주세요.", "Please enter the task prompt."),
+    "a.err.mode": ("mode는 five_hour 또는 weekly 여야 합니다.", "mode must be five_hour or weekly."),
+    "a.err.model": ("모델은 fable/opus/sonnet/haiku 중 하나여야 합니다: {m}", "Model must be fable/opus/sonnet/haiku: {m}"),
+    "a.err.effort": ("effort는 low/medium/high/xhigh/max 중 하나여야 합니다: {v}", "Effort must be low/medium/high/xhigh/max: {v}"),
+    "a.err.server": ("서버 오류: {e}", "Server error: {e}"),
+    "a.runonce": ("조건 확인을 시작했습니다. 잠시 후 새로고침하세요.", "Check started. Refresh shortly."),
+}
+
+
+def t(key: str, **kw) -> str:
+    pair = M.get(key)
+    if not pair:
+        return key
+    msg = pair[_I]
+    return msg.format(**kw) if kw else msg

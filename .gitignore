@@ -1,0 +1,8 @@
+# 개인 데이터 — 예약 내용과 실행 이력이 담기므로 절대 커밋 금지
+tasks.json
+tasks.json.tmp
+logs/
+
+__pycache__/
+*.pyc
+.DS_Store

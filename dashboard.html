@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Schedule</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #171a23;
+    --surface2: #1e2230;
+    --border: #2a2f3f;
+    --text: #e7eaf2;
+    --muted: #8b91a5;
+    --accent: #6c8cff;
+    --green: #3ecf8e;
+    --amber: #f5b74e;
+    --red: #f2645a;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Pretendard", -apple-system, "Apple SD Gothic Neo", sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 20px 80px; }
+
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  header .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: var(--surface2); border: 1px solid var(--border);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.off { background: var(--red); }
+
+  button {
+    font: inherit; color: var(--text); background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 7px 14px; cursor: pointer; font-weight: 600; font-size: 13px;
+    transition: background .15s, border-color .15s;
+  }
+  button:hover { background: #262b3c; border-color: #3a4157; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.1); }
+  button.danger-ghost { color: var(--red); background: transparent; border-color: transparent; padding: 4px 8px; }
+  button.danger-ghost:hover { background: rgba(242,100,90,.1); border-color: transparent; }
+  button.small { padding: 4px 10px; font-size: 12px; border-radius: 8px; }
+
+  .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 26px; }
+  @media (max-width: 640px) { .gauges { grid-template-columns: 1fr; } }
+  .gauge {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+  }
+  .gauge .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .gauge .name { font-weight: 700; font-size: 13px; color: var(--muted); }
+  .gauge .pct { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+  .gauge .pct small { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .bar { height: 8px; border-radius: 999px; background: var(--surface2); overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; background: var(--green); transition: width .4s; }
+  .bar > i.warn { background: var(--amber); }
+  .bar > i.low { background: var(--red); }
+  .gauge .reset { margin-top: 9px; font-size: 12px; color: var(--muted); }
+
+  section { margin-bottom: 30px; }
+  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .sec-head h2 { font-size: 15px; font-weight: 700; }
+  .count { font-size: 12px; color: var(--muted); background: var(--surface2); padding: 2px 9px; border-radius: 999px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 15px 18px; margin-bottom: 10px;
+  }
+  .card .row1 { display: flex; align-items: flex-start; gap: 10px; }
+  .card .prompt { font-weight: 600; flex: 1; word-break: break-all; }
+  .badge {
+    flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    letter-spacing: .2px;
+  }
+  .badge.ready { background: rgba(62,207,142,.14); color: var(--green); }
+  .badge.wait { background: rgba(139,145,165,.14); color: var(--muted); }
+  .badge.done { background: rgba(108,140,255,.14); color: var(--accent); }
+  .badge.ok { background: rgba(62,207,142,.14); color: var(--green); }
+  .badge.budget_exceeded { background: rgba(245,183,78,.14); color: var(--amber); }
+  .badge.error, .badge.timeout { background: rgba(242,100,90,.14); color: var(--red); }
+  .meta { margin-top: 7px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 5px 14px; }
+  .meta b { color: var(--text); font-weight: 600; }
+  .reason { margin-top: 7px; font-size: 12px; color: var(--muted); }
+  .reason.ready { color: var(--green); }
+  .card .actions { margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end; }
+  .result-preview {
+    margin-top: 9px; font-size: 12px; color: var(--muted);
+    background: var(--surface2); border-radius: 8px; padding: 8px 11px;
+    max-height: 60px; overflow: hidden; white-space: pre-wrap; word-break: break-all;
+  }
+  .empty { color: var(--muted); font-size: 13px; padding: 18px; text-align: center; background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); }
+
+  /* 등록 폼 */
+  #addForm { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: none; }
+  #addForm.open { display: block; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .field input[type=text], .field input[type=number], .field input[type=time], .field textarea, .field select {
+    width: 100%; font: inherit; color: var(--text);
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 9px 12px; outline: none;
+  }
+  .field textarea { resize: vertical; min-height: 64px; }
+  .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .seg { display: inline-flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 3px; }
+  .seg button { border: none; background: transparent; padding: 6px 14px; border-radius: 8px; font-size: 13px; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+  .dir-row { display: flex; gap: 8px; }
+  .dir-row input { flex: 1; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 6px 4px 12px; font-size: 12px;
+  }
+  .chip .x { border: none; background: none; color: var(--red); cursor: pointer; font-size: 13px; padding: 0 4px; }
+  .recent-menu {
+    margin-top: 6px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; display: none;
+  }
+  .recent-menu.open { display: block; }
+  .recent-menu div { padding: 8px 13px; font-size: 12.5px; cursor: pointer; color: var(--muted); }
+  .recent-menu div:hover { background: #262b3c; color: var(--text); }
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 18px; border-radius: 12px; font-size: 13px; font-weight: 600;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4);
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>⏰ AI Schedule</h1>
+      <div class="sub" data-i="subtitle"></div>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="daemonPill"><span class="dot off"></span>...</span>
+    <button id="btnCheck" class="small" data-i="checkNow"></button>
+    <button id="btnAdd" class="primary small" data-i="newTask"></button>
+  </header>
+
+  <div id="addForm">
+    <div class="field">
+      <label data-i="flPrompt"></label>
+      <textarea id="fPrompt"></textarea>
+    </div>
+    <div class="field">
+      <label data-i="flDir"></label>
+      <div class="dir-row">
+        <input type="text" id="fDir" placeholder="/Users/me/project">
+        <button type="button" class="small" id="btnRecent" data-i="btnRecent"></button>
+        <button type="button" class="small" id="btnFinder" data-i="btnFinder"></button>
+      </div>
+      <div class="recent-menu" id="recentMenu"></div>
+    </div>
+    <div class="field">
+      <label data-i="flAddDirs"></label>
+      <div class="dir-row">
+        <input type="text" id="fAddDir">
+        <button type="button" class="small" id="btnAddDir" data-i="btnAddDir"></button>
+        <button type="button" class="small" id="btnFinderAdd">📂</button>
+      </div>
+      <div class="chips" id="addDirChips"></div>
+    </div>
+    <div class="field">
+      <label data-i="flMode"></label>
+      <div class="seg" id="fMode">
+        <button data-v="five_hour" class="on" data-i="mode5"></button>
+        <button data-v="weekly" data-i="modeW"></button>
+      </div>
+    </div>
+    <div class="grid2" id="fiveFields">
+      <div class="field">
+        <label data-i="flMinRemain"></label>
+        <input type="number" id="fMinRemain5" value="50" min="0" max="100">
+      </div>
+      <div class="field">
+        <label data-i="flBeforeReset"></label>
+        <input type="number" id="fBeforeReset" value="1" min="0" max="5" step="0.5">
+      </div>
+    </div>
+    <div class="grid2" id="weeklyFields" style="display:none">
+      <div class="field">
+        <label data-i="flMinRemain"></label>
+        <input type="number" id="fMinRemainW" value="30" min="0" max="100">
+      </div>
+      <div class="field">
+        <label data-i="flDayTime"></label>
+        <div style="display:flex; gap:8px">
+          <select id="fDay" style="flex:1"></select>
+          <input type="time" id="fTime" value="09:00" style="flex:1">
+        </div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label data-i="flModel"></label>
+        <select id="fModel">
+          <option value="" data-i="moDefault"></option>
+          <option value="fable" data-i="moFable"></option>
+          <option value="opus" data-i="moOpus"></option>
+          <option value="sonnet" data-i="moSonnet"></option>
+          <option value="haiku" data-i="moHaiku"></option>
+        </select>
+      </div>
+      <div class="field">
+        <label data-i="flEffort"></label>
+        <select id="fEffort">
+          <option value="" data-i="efDefault"></option>
+          <option value="low" data-i="efLow"></option>
+          <option value="medium" data-i="efMedium"></option>
+          <option value="high" data-i="efHigh"></option>
+          <option value="xhigh" data-i="efXhigh"></option>
+          <option value="max" data-i="efMax"></option>
+        </select>
+      </div>
+      <div class="field">
+        <label data-i="flBudget"></label>
+        <input type="number" id="fBudget" min="0" step="0.5">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button id="btnCancel" data-i="cancel"></button>
+      <button id="btnSubmit" class="primary" data-i="submit"></button>
+    </div>
+  </div>
+
+  <section id="usageSec" style="margin-top:22px">
+    <div class="gauges">
+      <div class="gauge" id="g5"></div>
+      <div class="gauge" id="g7"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2 data-i="secWait"></h2><span class="count" id="cntWait">0</span></div>
+    <div id="listWait"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2 data-i="secDone"></h2><span class="count" id="cntDone">0</span></div>
+    <div id="listDone"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2 data-i="secHist"></h2><span class="count" id="cntHist">0</span></div>
+    <div id="listHist"></div>
+  </section>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let state = null;
+
+// ---- i18n: URL의 ?lang= 이 우선, 없으면 브라우저 언어 ----
+const lang = ((new URLSearchParams(location.search).get("lang") || navigator.language || "en")
+  .toLowerCase().startsWith("ko")) ? "ko" : "en";
+
+const STR = {
+  ko: {
+    subtitle: "Claude 할당량 기반 작업 스케줄러",
+    checkNow: "지금 조건 확인", newTask: "+ 새 예약",
+    daemonOn: p => `자동 실행 중 (pid ${p})`,
+    daemonOff: "자동 실행 꺼짐 — 터미널에서 start 필요",
+    serverLost: "서버 연결 끊김",
+    g5: "5시간 할당량", g7: "위클리 할당량", pctLeft: "% 남음",
+    usageFail: "사용량 조회 실패", resetDone: "리셋됨",
+    resetIn: (d, h, m) => d ? `${d}일 ${h}시간 후 리셋` : (h ? `${h}시간 ${m}분 후 리셋` : `${m}분 후 리셋`),
+    dur: (h, m, s) => h ? `${h}시간 ${m}분` : (m ? `${m}분 ${s}초` : `${s}초`),
+    badgeReady: "지금 조건 충족", badgeWait: "대기", badgeDone: "실행됨",
+    condNone: "조건 없음",
+    cond5: (p, h) => `5시간 잔여 ${p}% 이상 · 리셋 ${h}시간 전부터`,
+    condW: (p, d, t) => `위클리 잔여 ${p}% 이상 · 매주 ${d} ${t}`,
+    modelDefault: "기본", unlimited: "무제한",
+    addAccess: n => `추가 접근 ${n}개`,
+    lastSession: "최근 세션 열기", sessionOpen: "세션 열기", del: "삭제",
+    secWait: "⏳ 대기 중인 예약", secDone: "✅ 이번 윈도우에 실행된 예약", secHist: "📜 실행 기록",
+    emptyWait: '대기 중인 예약이 없습니다. "+ 새 예약"으로 등록하세요.',
+    emptyDone: "이번 5시간 윈도우/이번 주에 실행된 예약이 없습니다.",
+    emptyHist: "아직 실행 기록이 없습니다.",
+    confirmDel: "이 예약을 삭제할까요?",
+    toastDel: "예약이 삭제되었습니다", toastOpen: "터미널에서 세션을 엽니다",
+    toastPick: "Finder에서 폴더를 선택하세요 (창이 뒤에 있을 수 있습니다)",
+    toastPickFail: "폴더 선택 실패", toastAdded: "예약이 등록되었습니다",
+    toastCheck: "조건 확인을 시작했습니다 — 충족된 작업은 곧 실행됩니다",
+    noRecent: "최근 사용한 폴더가 없습니다",
+    status: { ok: "완료", budget_exceeded: "예산 초과", error: "실패", timeout: "타임아웃" },
+    flPrompt: "무슨 작업을 할까요? (무인 실행되므로 구체적으로)",
+    phPrompt: "예: src/components의 미사용 export를 찾아 목록으로 정리해줘",
+    flDir: "작업 폴더", btnRecent: "최근 ▾", btnFinder: "📂 찾아보기",
+    flAddDirs: "추가 접근 폴더 (선택 — 이 세션이 함께 접근할 수 있는 폴더)",
+    phAddDir: "경로 입력 후 추가", btnAddDir: "+ 추가",
+    flMode: "실행 기준", mode5: "5시간 할당량", modeW: "위클리 할당량",
+    flMinRemain: "잔여 몇 % 이상일 때", flBeforeReset: "리셋 몇 시간 전부터", flDayTime: "요일 / 시각",
+    flModel: "모델",
+    moDefault: "기본 (Claude Code 설정)", moFable: "Fable — 최상위",
+    moOpus: "Opus — 가장 강력", moSonnet: "Sonnet — 균형", moHaiku: "Haiku — 가볍고 절약",
+    flEffort: "추론 강도 (effort)",
+    efDefault: "기본 (Claude Code 설정)", efLow: "low — 토큰 절약", efMedium: "medium",
+    efHigh: "high", efXhigh: "xhigh", efMax: "max — 최대 추론",
+    flBudget: "최대 예산 ($)", phBudget: "비워두면 무제한",
+    cancel: "취소", submit: "예약 등록",
+    days: ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"],
+  },
+  en: {
+    subtitle: "Quota-aware task scheduler for Claude",
+    checkNow: "Check now", newTask: "+ New task",
+    daemonOn: p => `Auto-run on (pid ${p})`,
+    daemonOff: "Auto-run off — run start in a terminal",
+    serverLost: "Server disconnected",
+    g5: "5-hour quota", g7: "Weekly quota", pctLeft: "% left",
+    usageFail: "Failed to fetch usage", resetDone: "Reset",
+    resetIn: (d, h, m) => d ? `resets in ${d}d ${h}h` : (h ? `resets in ${h}h ${m}m` : `resets in ${m}m`),
+    dur: (h, m, s) => h ? `${h}h ${m}m` : (m ? `${m}m ${s}s` : `${s}s`),
+    badgeReady: "Ready now", badgeWait: "Waiting", badgeDone: "Ran",
+    condNone: "No condition",
+    cond5: (p, h) => `≥${p}% of 5-hour quota · within ${h}h of reset`,
+    condW: (p, d, t) => `≥${p}% weekly quota · every ${d} ${t}`,
+    modelDefault: "default", unlimited: "unlimited",
+    addAccess: n => `+${n} folders`,
+    lastSession: "Open last session", sessionOpen: "Open session", del: "Delete",
+    secWait: "⏳ Waiting", secDone: "✅ Ran this window", secHist: "📜 Run history",
+    emptyWait: 'No tasks waiting. Use "+ New task" to schedule one.',
+    emptyDone: "Nothing has run in this 5-hour window / this week.",
+    emptyHist: "No runs yet.",
+    confirmDel: "Delete this task?",
+    toastDel: "Task deleted", toastOpen: "Opening session in Terminal",
+    toastPick: "Pick a folder in Finder (the dialog may be behind this window)",
+    toastPickFail: "Folder selection failed", toastAdded: "Task scheduled",
+    toastCheck: "Check started — eligible tasks will run shortly",
+    noRecent: "No recently used folders",
+    status: { ok: "Done", budget_exceeded: "Budget exceeded", error: "Failed", timeout: "Timed out" },
+    flPrompt: "What should Claude do? (runs unattended — be specific)",
+    phPrompt: "e.g. Find unused exports in src/components and list them",
+    flDir: "Working folder", btnRecent: "Recent ▾", btnFinder: "📂 Browse",
+    flAddDirs: "Additional folders (optional — also accessible to this session)",
+    phAddDir: "Type a path, then Add", btnAddDir: "+ Add",
+    flMode: "Trigger", mode5: "5-hour quota", modeW: "Weekly quota",
+    flMinRemain: "Run when at least this % remains", flBeforeReset: "Hours before reset", flDayTime: "Day / time",
+    flModel: "Model",
+    moDefault: "Default (Claude Code setting)", moFable: "Fable — top-tier",
+    moOpus: "Opus — most capable", moSonnet: "Sonnet — balanced", moHaiku: "Haiku — light & cheap",
+    flEffort: "Reasoning effort",
+    efDefault: "Default (Claude Code setting)", efLow: "low — saves tokens", efMedium: "medium",
+    efHigh: "high", efXhigh: "xhigh", efMax: "max — deepest reasoning",
+    flBudget: "Max budget ($)", phBudget: "Empty = unlimited",
+    cancel: "Cancel", submit: "Schedule",
+    days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+  },
+};
+const T = STR[lang];
+const DAY_VALUES = ["월", "화", "수", "목", "금", "토", "일"]; // 저장용 정규 표기
+
+function applyStatic() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i]").forEach(el => {
+    const v = T[el.dataset.i];
+    if (typeof v === "string") el.textContent = v;
+  });
+  $("#fPrompt").placeholder = T.phPrompt;
+  $("#fAddDir").placeholder = T.phAddDir;
+  $("#fBudget").placeholder = T.phBudget;
+  $("#fDay").innerHTML = DAY_VALUES.map((v, i) => `<option value="${v}">${T.days[i]}</option>`).join("");
+}
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function fmtCountdown(iso) {
+  const diff = (new Date(iso) - new Date()) / 1000;
+  if (diff <= 0) return T.resetDone;
+  const d = Math.floor(diff / 86400), h = Math.floor((diff % 86400) / 3600), m = Math.floor((diff % 3600) / 60);
+  return T.resetIn(d, h, m);
+}
+
+function fmtDuration(sec) {
+  if (sec == null || sec < 0) return "-";
+  return T.dur(Math.floor(sec / 3600), Math.floor((sec % 3600) / 60), sec % 60);
+}
+
+function fmtTime(iso) {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function gauge(el, name, w) {
+  if (!w) { el.innerHTML = `<div class="name">${name}</div><div class="reset">${T.usageFail}</div>`; return; }
+  const pct = Math.max(0, Math.min(100, w.remaining_pct));
+  const cls = pct < 20 ? "low" : pct < 45 ? "warn" : "";
+  const r = new Date(w.resets_at);
+  el.innerHTML = `
+    <div class="top"><span class="name">${name}</span>
+      <span class="pct">${pct.toFixed(0)}<small>${T.pctLeft}</small></span></div>
+    <div class="bar"><i class="${cls}" style="width:${pct}%"></i></div>
+    <div class="reset">${fmtCountdown(w.resets_at)} (${String(r.getHours()).padStart(2,"0")}:${String(r.getMinutes()).padStart(2,"0")})</div>`;
+}
+
+const DAY_INDEX = { "월":0,"화":1,"수":2,"목":3,"금":4,"토":5,"일":6,"mon":0,"tue":1,"wed":2,"thu":3,"fri":4,"sat":5,"sun":6 };
+function condText(t) {
+  if (t.five_hour) return T.cond5(t.five_hour.min_remaining_pct, t.five_hour.hours_before_reset);
+  if (t.weekly) {
+    const idx = DAY_INDEX[t.weekly.day_of_week] ?? 0;
+    return T.condW(t.weekly.min_remaining_pct, T.days[idx], t.weekly.time);
+  }
+  return T.condNone;
+}
+
+function taskCard(t) {
+  const badge = t.eligible
+    ? `<span class="badge ready">${T.badgeReady}</span>`
+    : t.fired ? `<span class="badge done">${T.badgeDone}</span>` : `<span class="badge wait">${T.badgeWait}</span>`;
+  return `<div class="card">
+    <div class="row1"><div class="prompt">${esc(t.prompt)}</div>${badge}</div>
+    <div class="meta">
+      <span>📁 <b>${esc(t.working_dir.split("/").slice(-2).join("/"))}</b></span>
+      ${t.add_dirs && t.add_dirs.length ? `<span title="${esc(t.add_dirs.join("\n"))}">📂 ${T.addAccess(t.add_dirs.length)}</span>` : ""}
+      <span>⚙️ ${condText(t)}</span>
+      <span>🤖 ${t.model || T.modelDefault}${t.effort ? " · " + t.effort : ""}</span>
+      <span>💰 ${t.max_budget_usd ? "$" + t.max_budget_usd : T.unlimited}</span>
+    </div>
+    <div class="reason ${t.eligible ? "ready" : ""}">${esc(t.reason)}</div>
+    <div class="actions">
+      ${t.last_session_id ? `<button class="small" onclick="openSession('${encodeURIComponent(t.working_dir)}','${t.last_session_id}')">${T.lastSession}</button>` : ""}
+      <button class="danger-ghost small" onclick="removeTask('${t.id}')">${T.del}</button>
+    </div>
+  </div>`;
+}
+
+function histCard(h) {
+  const dur = h.started_at && h.finished_at
+    ? fmtDuration(Math.round((new Date(h.finished_at) - new Date(h.started_at)) / 1000)) : "-";
+  return `<div class="card">
+    <div class="row1">
+      <div class="prompt">${esc(h.prompt)}</div>
+      <span class="badge ${h.status}">${T.status[h.status] || h.status}</span>
+    </div>
+    <div class="meta">
+      <span>🕑 <b>${fmtTime(h.started_at)}</b> (${dur})</span>
+      <span>🤖 ${h.model || T.modelDefault}</span>
+      <span>💰 ${h.cost != null ? "$" + h.cost.toFixed(2) : "-"}</span>
+    </div>
+    ${h.result_preview ? `<div class="result-preview">${esc(h.result_preview)}</div>` : ""}
+    ${h.session_id ? `<div class="actions"><button class="small" onclick="openSession('${encodeURIComponent(h.working_dir)}','${h.session_id}')">${T.sessionOpen}</button></div>` : ""}
+  </div>`;
+}
+
+function render() {
+  if (!state) return;
+  const d = state.daemon;
+  $("#daemonPill").innerHTML = d.running
+    ? `<span class="dot on"></span>${T.daemonOn(d.pid)}`
+    : `<span class="dot off"></span>${T.daemonOff}`;
+
+  gauge($("#g5"), T.g5, state.usage && state.usage.five_hour);
+  gauge($("#g7"), T.g7, state.usage && state.usage.seven_day);
+
+  const fired = state.tasks.filter(t => !t.eligible && t.fired);
+  const waiting = state.tasks.filter(t => !fired.includes(t));
+  $("#cntWait").textContent = waiting.length;
+  $("#cntDone").textContent = fired.length;
+  $("#listWait").innerHTML = waiting.map(taskCard).join("") || `<div class="empty">${T.emptyWait}</div>`;
+  $("#listDone").innerHTML = fired.map(taskCard).join("") || `<div class="empty">${T.emptyDone}</div>`;
+
+  $("#cntHist").textContent = state.history.length;
+  $("#listHist").innerHTML = state.history.map(histCard).join("") || `<div class="empty">${T.emptyHist}</div>`;
+}
+
+async function refresh() {
+  try {
+    state = await (await fetch("/api/state")).json();
+    render();
+  } catch (e) {
+    $("#daemonPill").innerHTML = `<span class="dot off"></span>${T.serverLost}`;
+  }
+}
+
+async function removeTask(id) {
+  if (!confirm(T.confirmDel)) return;
+  await fetch("/api/tasks/" + id, { method: "DELETE" });
+  toast(T.toastDel);
+  refresh();
+}
+
+async function openSession(dirEncoded, sid) {
+  await fetch("/api/open-session", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ working_dir: decodeURIComponent(dirEncoded), session_id: sid }),
+  });
+  toast(T.toastOpen);
+}
+
+// ---- 등록 폼 ----
+let mode = "five_hour";
+let addDirs = [];
+
+function renderChips() {
+  $("#addDirChips").innerHTML = addDirs.map((d, i) =>
+    `<span class="chip">${esc(d.split("/").slice(-2).join("/"))}<button class="x" onclick="addDirs.splice(${i},1);renderChips()">✕</button></span>`
+  ).join("");
+}
+
+async function pickFolder(cb) {
+  toast(T.toastPick);
+  try {
+    const r = await (await fetch("/api/pick-folder", { method: "POST" })).json();
+    if (r.ok && r.path) cb(r.path);
+    else if (!r.cancelled) toast("⚠️ " + (r.error || T.toastPickFail));
+  } catch { toast("⚠️ " + T.toastPickFail); }
+}
+
+$("#btnFinder").onclick = () => pickFolder(p => $("#fDir").value = p);
+$("#btnFinderAdd").onclick = () => pickFolder(p => { addDirs.push(p); renderChips(); });
+$("#btnAddDir").onclick = () => {
+  const v = $("#fAddDir").value.trim();
+  if (v) { addDirs.push(v); $("#fAddDir").value = ""; renderChips(); }
+};
+$("#btnRecent").onclick = async () => {
+  const menu = $("#recentMenu");
+  if (menu.classList.contains("open")) { menu.classList.remove("open"); return; }
+  const r = await (await fetch("/api/recent-dirs")).json();
+  menu.innerHTML = r.dirs.length
+    ? r.dirs.map(d => `<div data-d="${esc(d)}">${esc(d)}</div>`).join("")
+    : `<div>${T.noRecent}</div>`;
+  menu.classList.add("open");
+  menu.querySelectorAll("div[data-d]").forEach(el =>
+    el.onclick = () => { $("#fDir").value = el.dataset.d; menu.classList.remove("open"); });
+};
+$("#fMode").addEventListener("click", e => {
+  if (e.target.tagName !== "BUTTON") return;
+  mode = e.target.dataset.v;
+  document.querySelectorAll("#fMode button").forEach(b => b.classList.toggle("on", b === e.target));
+  $("#fiveFields").style.display = mode === "five_hour" ? "grid" : "none";
+  $("#weeklyFields").style.display = mode === "weekly" ? "grid" : "none";
+});
+$("#btnAdd").onclick = () => $("#addForm").classList.toggle("open");
+$("#btnCancel").onclick = () => $("#addForm").classList.remove("open");
+$("#btnSubmit").onclick = async () => {
+  const payload = {
+    prompt: $("#fPrompt").value,
+    dir: $("#fDir").value,
+    add_dirs: addDirs,
+    mode,
+    min_remaining: mode === "five_hour" ? $("#fMinRemain5").value : $("#fMinRemainW").value,
+    before_reset: $("#fBeforeReset").value,
+    day: $("#fDay").value,
+    time: $("#fTime").value,
+    model: $("#fModel").value,
+    effort: $("#fEffort").value,
+    budget: $("#fBudget").value,
+  };
+  const res = await (await fetch("/api/tasks", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })).json();
+  if (!res.ok) { toast("⚠️ " + res.error); return; }
+  toast(T.toastAdded);
+  $("#addForm").classList.remove("open");
+  $("#fPrompt").value = "";
+  addDirs = [];
+  renderChips();
+  refresh();
+};
+$("#btnCheck").onclick = async () => {
+  await fetch("/api/run-once", { method: "POST" });
+  toast(T.toastCheck);
+  setTimeout(refresh, 3000);
+};
+
+applyStatic();
+refresh();
+setInterval(refresh, 30000);          // 상태 30초마다 갱신
+setInterval(() => state && render(), 60000);  // 카운트다운 표기 갱신
+</script>
+</body>
+</html>
