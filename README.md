@@ -1,5 +1,12 @@
 # ⏰ AI Schedule
 
+<img width="970" height="1267" alt="image" src="https://github.com/user-attachments/assets/70292a52-2b22-4144-b000-8f03c360af08" />
+
+
+
+<img width="1009" height="800" alt="image" src="https://github.com/user-attachments/assets/b6dc7857-1a9e-4f18-9da7-1efcc9c3a177" />
+
+
 **Quota-aware task scheduler for Claude Code** — automatically run pre-written tasks when your Claude subscription quota conditions are met (e.g. *"run this when ≥50% of my 5-hour quota remains and the reset is less than 1 hour away"*), instead of letting leftover quota expire unused.
 
 Runs entirely on your Mac. No external dependencies — just macOS's built-in Python 3 and your own Claude Code login.
@@ -93,6 +100,7 @@ UI language follows your browser (Korean/English); CLI follows your `LANG` (over
 ## 한국어 요약
 
 Claude 구독의 5시간/위클리 할당량이 조건에 맞을 때(예: "잔여 50% 이상 + 리셋 1시간 전") 미리 등록해둔 작업을 자동 실행하는 macOS 도구입니다. `./install.sh` 후 `ais add`로 예약, `ais start`로 자동 실행을 켜면 됩니다. 시작/완료 시 macOS 알림이 오고, 완료 알림을 클릭하면 해당 세션이 터미널로 열립니다. 대시보드는 `ais ui`. CLI/화면 언어는 시스템/브라우저 언어를 따릅니다.
+
 
 ## License
 
