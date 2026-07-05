@@ -78,6 +78,20 @@ Per-task options:
 | `--budget <USD>` | auto-stop the run if estimated cost exceeds this (omit = unlimited) |
 | `--add-dir <path>` | extra folders the session may access (repeatable) |
 
+## Jobs — split a big request across quota windows
+
+For work too big for one sitting (e.g. *"analyze how all 20 of my projects use the map API"*), let the planner decompose it and drip-execute the chunks whenever quota allows:
+
+```bash
+ais plan "Analyze every project under ~/work for deprecated API usage" --dir ~/work
+```
+
+- A haiku pass inventories the codebase, then a strong-model pass splits the request into **self-contained chunks** (each with its own model/effort assignment) plus a final synthesis step.
+- You review the plan — chunk list and estimated cost — and **nothing runs until you approve it**.
+- The daemon then executes chunks sequentially while the queue policy holds (default: 5-hour ≥30% and weekly ≥40% remaining), pausing automatically when quota drops and resuming in the next window — even across days.
+- Each chunk runs in a fresh session and writes its result to `jobs/<id>/`; the synthesis step merges everything into `jobs/<id>/report.md`. Failed chunks retry once, then are given up and flagged in the report.
+- Track and control it from the dashboard (progress bar, per-chunk states) or `ais jobs` / `ais job <id> [approve|pause|resume|cancel]`. Notifications arrive as digests, and the completion notification opens the final report.
+
 ## Web dashboard
 
 While the daemon is running, `http://localhost:8787` (bound to localhost only) shows:
@@ -100,6 +114,8 @@ UI language follows your browser (Korean/English); CLI follows your `LANG` (over
 ## 한국어 요약
 
 Claude 구독의 5시간/위클리 할당량이 조건에 맞을 때(예: "잔여 50% 이상 + 리셋 1시간 전") 미리 등록해둔 작업을 자동 실행하는 macOS 도구입니다. `./install.sh` 후 `ais add`로 예약, `ais start`로 자동 실행을 켜면 됩니다. 시작/완료 시 macOS 알림이 오고, 완료 알림을 클릭하면 해당 세션이 터미널로 열립니다. 대시보드는 `ais ui`. CLI/화면 언어는 시스템/브라우저 언어를 따릅니다.
+
+한 번에 하기엔 너무 큰 요청은 `ais plan "<큰 요청>" --dir <폴더>`으로 잡(Job)을 만드세요 — 자동으로 청크로 분해되고, 승인 후 할당량이 허용되는 동안 순차 실행되며(부족하면 자동 일시정지 후 다음 윈도우에 재개), 마지막에 종합 리포트가 생성됩니다.
 
 
 ## License
