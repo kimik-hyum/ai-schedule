@@ -196,3 +196,7 @@ def _run_once_locked() -> None:
                 updates["last_session_id"] = record["session_id"]
             store.update_task(task["id"], **updates)
         print()
+
+    # 단일 예약 처리 후 대형 작업(Job) 큐 진행
+    import jobrunner
+    jobrunner.process_jobs()

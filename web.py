@@ -51,6 +51,19 @@ def _state() -> dict:
             "seven_day": {"remaining_pct": u.seven_day.remaining_pct, "resets_at": u.seven_day.resets_at.isoformat()},
         }
 
+    jobs_out = []
+    for j in store.list_jobs():
+        if j["status"] == "cancelled":
+            continue
+        done = sum(1 for c in j["chunks"] if c["status"] == "ok")
+        failed = sum(1 for c in j["chunks"] if c["status"] == "failed")
+        quota_wait = False
+        if j["status"] == "running" and u:
+            p = j["policy"]
+            quota_wait = not (u.five_hour.remaining_pct >= p["min_five_hour_pct"]
+                              and u.seven_day.remaining_pct >= p["min_weekly_pct"])
+        jobs_out.append({**j, "done": done, "failed_count": failed, "quota_wait": quota_wait})
+
     import daemon as daemon_mod
     pid = daemon_mod._alive_pid()
     return {
@@ -58,6 +71,7 @@ def _state() -> dict:
         "usage_error": err,
         "daemon": {"running": bool(pid), "pid": pid},
         "tasks": tasks_out,
+        "jobs": jobs_out,
         "history": store.list_history(),
         "now": now.isoformat(timespec="seconds"),
     }
@@ -167,7 +181,39 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            if self.path == "/api/tasks":
+            if self.path.startswith("/api/jobs/"):
+                parts = self.path.strip("/").split("/")  # api / jobs / <id> / <action>
+                if len(parts) != 4:
+                    self._json({"error": "not found"}, 404)
+                    return
+                job_id, action = parts[2], parts[3]
+                job = store.get_job(job_id)
+                if not job:
+                    self._json({"ok": False, "error": t("s.err.jobnotfound", id=job_id)}, 404)
+                    return
+                transitions = {
+                    "approve": ("awaiting_approval", "running"),
+                    "pause": ("running", "paused"),
+                    "resume": ("paused", "running"),
+                }
+                if action == "cancel" and job["status"] not in ("done", "cancelled"):
+                    store.update_job(job_id, status="cancelled")
+                    self._json({"ok": True})
+                elif action in transitions and job["status"] == transitions[action][0]:
+                    store.update_job(job_id, status=transitions[action][1])
+                    self._json({"ok": True})
+                else:
+                    self._json({"ok": False, "error": t("s.err.jobaction", a=action, s=job["status"])}, 400)
+            elif self.path == "/api/open-path":
+                import planner
+                p = self._read_body()
+                path = Path(p["path"]).resolve()
+                if not str(path).startswith(str(planner.JOBS_DIR)):  # 잡 결과 폴더만 허용
+                    self._json({"ok": False, "error": "forbidden"}, 403)
+                    return
+                subprocess.Popen(["open", str(path)])
+                self._json({"ok": True})
+            elif self.path == "/api/tasks":
                 task = _build_task_from_payload(self._read_body())
                 self._json({"ok": True, "task": task})
             elif self.path == "/api/run-once":

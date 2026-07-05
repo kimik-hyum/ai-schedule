@@ -85,6 +85,86 @@ def cmd_run_once(_args):
     runner.run_once()
 
 
+def cmd_plan(args):
+    import planner
+    if not args.dir:
+        sys.exit(t("s.err.dirreq"))
+    wd = Path(args.dir).expanduser().resolve()
+    if not wd.is_dir():
+        sys.exit(t("s.err.dir", d=wd))
+    add_dirs = []
+    for d in args.add_dirs or []:
+        pd = Path(d).expanduser().resolve()
+        if not pd.is_dir():
+            sys.exit(t("s.err.adddir", d=d))
+        add_dirs.append(str(pd))
+
+    try:
+        job = planner.create_plan(
+            args.request, str(wd), add_dirs=add_dirs,
+            max_chunks=args.max_chunks, plan_model=args.plan_model,
+            synthesis_model=args.synthesis_model,
+            min_five=args.min_five, min_weekly=args.min_weekly,
+        )
+    except Exception as e:
+        sys.exit(t("p.err.fail", e=e))
+
+    lo, hi = planner.estimate_cost(job["chunks"])
+    print("\n" + t("p.card.title", id=job["id"]))
+    print(planner.format_job(job))
+    print(t("p.card.estimate", lo=lo, hi=hi, pc=job["planning_cost"]))
+
+    if args.yes:
+        job["status"] = "running"
+    elif sys.stdin.isatty():
+        ans = input(t("p.confirm")).strip().lower()
+        if ans not in ("y", "yes"):
+            print(t("p.discarded"))
+            return
+        job["status"] = "running"
+    # 비대화형 + --yes 없음 → 승인 대기로 저장 (대시보드나 `ais job <id> approve`로 승인)
+    store.add_job(job)
+    if job["status"] == "running":
+        print(t("p.registered.running"))
+    else:
+        print(t("p.registered.awaiting", id=job["id"]))
+
+
+def cmd_jobs(_args):
+    import planner
+    jobs = store.list_jobs()
+    if not jobs:
+        print(t("j.nolist"))
+        return
+    for j in jobs:
+        print(planner.format_job(j))
+        print()
+
+
+JOB_TRANSITIONS = {
+    "approve": ("awaiting_approval", "running"),
+    "pause": ("running", "paused"),
+    "resume": ("paused", "running"),
+}
+
+
+def cmd_job(args):
+    import planner
+    job = store.get_job(args.id)
+    if not job:
+        sys.exit(t("s.err.jobnotfound", id=args.id))
+    if args.action == "cancel":
+        if job["status"] in ("done", "cancelled"):
+            sys.exit(t("s.err.jobaction", a=args.action, s=job["status"]))
+        store.update_job(args.id, status="cancelled")
+    elif args.action in JOB_TRANSITIONS:
+        src, dst = JOB_TRANSITIONS[args.action]
+        if job["status"] != src:
+            sys.exit(t("s.err.jobaction", a=args.action, s=job["status"]))
+        store.update_job(args.id, status=dst)
+    print(planner.format_job(store.get_job(args.id)))
+
+
 def cmd_web(args):
     import web
     print(t("s.web", p=args.port))
@@ -129,6 +209,24 @@ def main():
     p_add.add_argument("--effort", choices=wizard.EFFORT_VALUES)
     p_add.add_argument("--budget", type=float)
     p_add.set_defaults(func=cmd_add)
+
+    p_plan = sub.add_parser("plan", help=t("s.h.plan"))
+    p_plan.add_argument("request")
+    p_plan.add_argument("--dir")
+    p_plan.add_argument("--add-dir", action="append", dest="add_dirs")
+    p_plan.add_argument("--max-chunks", type=int, default=12, dest="max_chunks")
+    p_plan.add_argument("--plan-model", choices=wizard.MODEL_VALUES, dest="plan_model")
+    p_plan.add_argument("--synthesis-model", choices=wizard.MODEL_VALUES, dest="synthesis_model")
+    p_plan.add_argument("--min-five", type=float, default=30, dest="min_five")
+    p_plan.add_argument("--min-weekly", type=float, default=40, dest="min_weekly")
+    p_plan.add_argument("--yes", action="store_true")
+    p_plan.set_defaults(func=cmd_plan)
+
+    sub.add_parser("jobs", help=t("s.h.jobs")).set_defaults(func=cmd_jobs)
+    p_job = sub.add_parser("job", help=t("s.h.job"))
+    p_job.add_argument("id")
+    p_job.add_argument("action", nargs="?", choices=["approve", "pause", "resume", "cancel"])
+    p_job.set_defaults(func=cmd_job)
 
     sub.add_parser("list", help=t("s.h.list")).set_defaults(func=cmd_list)
     sub.add_parser("run-once", help=t("s.h.runonce")).set_defaults(func=cmd_run_once)

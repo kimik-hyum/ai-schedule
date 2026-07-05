@@ -251,6 +251,11 @@
     </div>
   </section>
 
+  <section id="jobsSec" style="display:none">
+    <div class="sec-head"><h2 data-i="secJobs"></h2><span class="count" id="cntJobs">0</span></div>
+    <div id="listJobs"></div>
+  </section>
+
   <section>
     <div class="sec-head"><h2 data-i="secWait"></h2><span class="count" id="cntWait">0</span></div>
     <div id="listWait"></div>
@@ -295,6 +300,16 @@ const STR = {
     addAccess: n => `추가 접근 ${n}개`,
     lastSession: "최근 세션 열기", sessionOpen: "세션 열기", del: "삭제",
     secWait: "⏳ 대기 중인 예약", secDone: "✅ 이번 윈도우에 실행된 예약", secHist: "📜 실행 기록",
+    secJobs: "🧩 대형 작업 (Jobs)",
+    jobAwaiting: "승인 대기", jobRunning: "실행 중", jobQuotaWait: "할당량 대기",
+    jobPaused: "일시정지", jobDone: "완료", jobFailed: "실패",
+    jobPolicy: (f5, f7) => `정책: 5시간 잔여 ≥${f5}% + 위클리 잔여 ≥${f7}% 동안 실행`,
+    jobChunks: (d, n) => `청크 ${d}/${n} 완료`,
+    jobCostSoFar: c => `지금까지 $${c.toFixed(2)}`,
+    jobApprove: "승인하고 시작", jobPause: "일시정지", jobResume: "재개",
+    jobCancel: "중단", jobOutputs: "결과 폴더",
+    chunkRetry: "실패 · 재시도 예정", chunkGiveUp: "포기됨", chunkWait: "대기",
+    confirmCancelJob: "이 작업 전체를 중단할까요?", toastJob: "반영되었습니다",
     emptyWait: '대기 중인 예약이 없습니다. "+ 새 예약"으로 등록하세요.',
     emptyDone: "이번 5시간 윈도우/이번 주에 실행된 예약이 없습니다.",
     emptyHist: "아직 실행 기록이 없습니다.",
@@ -340,6 +355,16 @@ const STR = {
     addAccess: n => `+${n} folders`,
     lastSession: "Open last session", sessionOpen: "Open session", del: "Delete",
     secWait: "⏳ Waiting", secDone: "✅ Ran this window", secHist: "📜 Run history",
+    secJobs: "🧩 Jobs",
+    jobAwaiting: "Awaiting approval", jobRunning: "Running", jobQuotaWait: "Waiting for quota",
+    jobPaused: "Paused", jobDone: "Done", jobFailed: "Failed",
+    jobPolicy: (f5, f7) => `Policy: run while 5-hour ≥${f5}% and weekly ≥${f7}% remain`,
+    jobChunks: (d, n) => `${d}/${n} chunks done`,
+    jobCostSoFar: c => `$${c.toFixed(2)} so far`,
+    jobApprove: "Approve and start", jobPause: "Pause", jobResume: "Resume",
+    jobCancel: "Cancel", jobOutputs: "Outputs",
+    chunkRetry: "failed · will retry", chunkGiveUp: "given up", chunkWait: "pending",
+    confirmCancelJob: "Cancel this entire job?", toastJob: "Updated",
     emptyWait: 'No tasks waiting. Use "+ New task" to schedule one.',
     emptyDone: "Nothing has run in this 5-hour window / this week.",
     emptyHist: "No runs yet.",
@@ -472,6 +497,80 @@ function histCard(h) {
   </div>`;
 }
 
+function jobBadge(j) {
+  if (j.status === "awaiting_approval") return `<span class="badge budget_exceeded">${T.jobAwaiting}</span>`;
+  if (j.status === "running" && j.quota_wait) return `<span class="badge wait">${T.jobQuotaWait}</span>`;
+  if (j.status === "running") return `<span class="badge ready">${T.jobRunning}</span>`;
+  if (j.status === "paused") return `<span class="badge wait">${T.jobPaused}</span>`;
+  if (j.status === "done") return `<span class="badge done">${T.jobDone}</span>`;
+  return `<span class="badge error">${T.jobFailed}</span>`;
+}
+
+function chunkRow(c) {
+  let icon = "·", note = T.chunkWait, color = "var(--muted)";
+  if (c.status === "ok") { icon = "✓"; note = (c.cost != null ? "$" + c.cost.toFixed(2) : ""); color = "var(--green)"; }
+  else if (c.status === "running") { icon = "▶"; note = "…"; color = "var(--accent)"; }
+  else if (c.status === "failed") {
+    icon = "✗"; color = "var(--red)";
+    note = c.attempts >= 2 ? T.chunkGiveUp : T.chunkRetry;
+  }
+  const model = (c.model || T.modelDefault) + (c.effort ? "·" + c.effort : "");
+  return `<div style="display:flex; align-items:center; gap:8px; padding:2px 0; font-size:12.5px; color:var(--muted);">
+    <span style="color:${color}; width:14px; text-align:center;">${icon}</span>
+    <span style="color:var(--text); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${String(c.idx).padStart(2,"0")}. ${esc(c.title)}</span>
+    <span>${esc(model)}</span><span style="min-width:70px; text-align:right;">${esc(note)}</span>
+  </div>`;
+}
+
+function jobCard(j) {
+  const total = j.chunks.length;
+  const pct = Math.round(j.done / total * 100);
+  let buttons = "";
+  if (j.status === "awaiting_approval") {
+    buttons = `<button class="small" style="background:var(--accent); border-color:var(--accent); color:#fff" onclick="jobAction('${j.id}','approve')">${T.jobApprove}</button>
+      <button class="danger-ghost small" onclick="jobAction('${j.id}','cancel', true)">${T.jobCancel}</button>`;
+  } else if (j.status === "running") {
+    buttons = `<button class="small" onclick="openPath('${encodeURIComponent(j.output_dir)}')">${T.jobOutputs}</button>
+      <button class="small" onclick="jobAction('${j.id}','pause')">${T.jobPause}</button>
+      <button class="danger-ghost small" onclick="jobAction('${j.id}','cancel', true)">${T.jobCancel}</button>`;
+  } else if (j.status === "paused") {
+    buttons = `<button class="small" onclick="openPath('${encodeURIComponent(j.output_dir)}')">${T.jobOutputs}</button>
+      <button class="small" onclick="jobAction('${j.id}','resume')">${T.jobResume}</button>
+      <button class="danger-ghost small" onclick="jobAction('${j.id}','cancel', true)">${T.jobCancel}</button>`;
+  } else {
+    buttons = `<button class="small" onclick="openPath('${encodeURIComponent(j.output_dir)}')">${T.jobOutputs}</button>`;
+  }
+  return `<div class="card">
+    <div class="row1"><div class="prompt">${esc(j.request)}</div>${jobBadge(j)}</div>
+    <div class="meta"><span>📁 <b>${esc(j.working_dir.split("/").slice(-2).join("/"))}</b></span>
+      <span>⚙️ ${T.jobPolicy(j.policy.min_five_hour_pct, j.policy.min_weekly_pct)}</span></div>
+    <div style="margin-top:11px;">
+      <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:5px;">
+        <span>${T.jobChunks(j.done, total)}</span><span>${T.jobCostSoFar(j.total_cost || 0)}</span>
+      </div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+    </div>
+    <div style="border-top:1px solid var(--border); margin-top:11px; padding-top:8px;">
+      ${j.chunks.map(chunkRow).join("")}
+    </div>
+    <div class="actions">${buttons}</div>
+  </div>`;
+}
+
+async function jobAction(id, action, confirmFirst) {
+  if (confirmFirst && !confirm(T.confirmCancelJob)) return;
+  const r = await (await fetch(`/api/jobs/${id}/${action}`, { method: "POST" })).json();
+  toast(r.ok ? T.toastJob : "⚠️ " + (r.error || ""));
+  refresh();
+}
+
+async function openPath(pathEncoded) {
+  await fetch("/api/open-path", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: decodeURIComponent(pathEncoded) }),
+  });
+}
+
 function render() {
   if (!state) return;
   const d = state.daemon;
@@ -481,6 +580,11 @@ function render() {
 
   gauge($("#g5"), T.g5, state.usage && state.usage.five_hour);
   gauge($("#g7"), T.g7, state.usage && state.usage.seven_day);
+
+  const jobs = state.jobs || [];
+  document.querySelector("#jobsSec").style.display = jobs.length ? "" : "none";
+  $("#cntJobs").textContent = jobs.length;
+  $("#listJobs").innerHTML = jobs.map(jobCard).join("");
 
   const fired = state.tasks.filter(t => !t.eligible && t.fired);
   const waiting = state.tasks.filter(t => !fired.includes(t));

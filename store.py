@@ -5,7 +5,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-STORE_PATH = Path(__file__).resolve().parent / "tasks.json"
+# 기본은 프로젝트 폴더의 tasks.json. AIS_STORE로 재정의하면 격리된 인스턴스(데모/테스트) 실행 가능
+STORE_PATH = Path(os.environ.get("AIS_STORE") or (Path(__file__).resolve().parent / "tasks.json"))
 # 데몬 루프와 웹 서버 스레드가 같은 프로세스에서 읽기-수정-쓰기를 하므로 락 필수
 _LOCK = threading.RLock()
 
@@ -76,6 +77,57 @@ def update_task(task_id: str, **fields) -> None:
                 t.update(fields)
                 break
         _save_raw(data)
+
+
+def add_job(job: dict) -> None:
+    with _LOCK:
+        data = _load_raw()
+        data.setdefault("jobs", []).append(job)
+        _save_raw(data)
+
+
+def list_jobs() -> list:
+    with _LOCK:
+        return _load_raw().get("jobs", [])
+
+
+def get_job(job_id: str):
+    for j in list_jobs():
+        if j["id"] == job_id:
+            return j
+    return None
+
+
+def update_job(job_id: str, **fields) -> None:
+    with _LOCK:
+        data = _load_raw()
+        for j in data.get("jobs", []):
+            if j["id"] == job_id:
+                j.update(fields)
+                break
+        _save_raw(data)
+
+
+def update_chunk(job_id: str, idx: int, **fields) -> None:
+    with _LOCK:
+        data = _load_raw()
+        for j in data.get("jobs", []):
+            if j["id"] == job_id:
+                for c in j["chunks"]:
+                    if c["idx"] == idx:
+                        c.update(fields)
+                        break
+                break
+        _save_raw(data)
+
+
+def remove_job(job_id: str) -> bool:
+    with _LOCK:
+        data = _load_raw()
+        before = len(data.get("jobs", []))
+        data["jobs"] = [j for j in data.get("jobs", []) if j["id"] != job_id]
+        _save_raw(data)
+        return len(data["jobs"]) < before
 
 
 def add_history(record: dict) -> None:

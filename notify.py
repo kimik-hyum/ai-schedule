@@ -65,3 +65,29 @@ def notify_error(task: dict, reason: str):
         sound="Basso",
         group=f"ai-schedule-{task['id']}",
     )
+
+
+def notify_job_digest(job: dict, ok: int, fail: int, cost: float, done: int, total: int):
+    _send(
+        title=t("n.job.digest", d=done, n=total),
+        message=t("n.job.digest.msg", ok=ok, fail=fail, c=cost, p=job["request"][:40]),
+        group=f"ai-schedule-job-{job['id']}",
+    )
+
+
+def notify_job_done(job: dict, report_path: str):
+    _send(
+        title=t("n.job.done"),
+        message=job["request"][:60],
+        execute=f"open '{report_path}'",
+        group=f"ai-schedule-job-{job['id']}",
+    )
+
+
+def notify_job_failed(job: dict):
+    _send(
+        title=t("n.job.failed"),
+        message=job["request"][:60],
+        sound="Basso",
+        group=f"ai-schedule-job-{job['id']}",
+    )
