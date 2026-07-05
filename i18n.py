@@ -221,6 +221,8 @@ M = {
                              "✅ Job queued — the daemon starts it on its next check (immediately: ais run-once)"),
     "p.registered.awaiting": ("⏸ 승인 대기로 등록되었습니다 — 대시보드 또는 `ais job {id} approve`로 승인하세요",
                               "⏸ Registered awaiting approval — approve in the dashboard or `ais job {id} approve`"),
+    "j.st.planning": ("계획 수립 중", "planning"),
+    "j.st.plan_failed": ("계획 실패", "planning failed"),
     "j.st.awaiting": ("승인 대기", "awaiting approval"),
     "j.st.running": ("실행 중", "running"),
     "j.st.paused": ("일시정지", "paused"),

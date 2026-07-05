@@ -155,8 +155,42 @@
     <div class="spacer"></div>
     <span class="pill" id="daemonPill"><span class="dot off"></span>...</span>
     <button id="btnCheck" class="small" data-i="checkNow"></button>
+    <button id="btnAddJob" class="small" data-i="newJob"></button>
     <button id="btnAdd" class="primary small" data-i="newTask"></button>
   </header>
+
+  <div id="jobForm" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: none;">
+    <div class="field">
+      <label data-i="jfRequest"></label>
+      <textarea id="jfText"></textarea>
+    </div>
+    <div class="field">
+      <label data-i="flDir"></label>
+      <div class="dir-row">
+        <input type="text" id="jfDir" placeholder="/Users/me/projects">
+        <button type="button" class="small" id="jfBrowse" data-i="btnFinder"></button>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label data-i="jfMaxChunks"></label>
+        <input type="number" id="jfMaxChunks" value="12" min="1" max="30">
+      </div>
+      <div class="field">
+        <label data-i="jfMinFive"></label>
+        <input type="number" id="jfMinFive" value="30" min="0" max="100">
+      </div>
+      <div class="field">
+        <label data-i="jfMinWeekly"></label>
+        <input type="number" id="jfMinWeekly" value="40" min="0" max="100">
+      </div>
+    </div>
+    <p class="hint" data-i="jfHint"></p>
+    <div class="form-actions">
+      <button id="jfCancel" data-i="cancel"></button>
+      <button id="jfSubmit" class="primary" data-i="jfSubmit"></button>
+    </div>
+  </div>
 
   <div id="addForm">
     <div class="field">
@@ -310,6 +344,14 @@ const STR = {
     jobCancel: "중단", jobOutputs: "결과 폴더",
     chunkRetry: "실패 · 재시도 예정", chunkGiveUp: "포기됨", chunkWait: "대기",
     confirmCancelJob: "이 작업 전체를 중단할까요?", toastJob: "반영되었습니다",
+    newJob: "+ 새 잡", jobPlanning: "계획 수립 중", jobPlanFailed: "계획 실패",
+    planningNote: "인벤토리 수집과 청크 분해를 진행하고 있습니다 (1~2분)…",
+    jfRequest: "무엇을 할까요? (큰 요청 — 자동으로 청크로 분해됩니다)",
+    jfRequestPh: "예: 이 폴더의 모든 프로젝트에서 폐기 예정 API 사용처를 찾아 정리해줘",
+    jfMaxChunks: "최대 청크 수", jfMinFive: "5시간 잔여 ≥ %", jfMinWeekly: "위클리 잔여 ≥ %",
+    jfHint: "계획이 완성되면 승인 대기 카드가 나타납니다 — 승인 전에는 아무것도 실행되지 않습니다.",
+    jfSubmit: "계획 수립 시작",
+    toastPlanStarted: "계획 수립을 시작했습니다 — 잠시 후 승인 카드가 나타납니다",
     emptyWait: '대기 중인 예약이 없습니다. "+ 새 예약"으로 등록하세요.',
     emptyDone: "이번 5시간 윈도우/이번 주에 실행된 예약이 없습니다.",
     emptyHist: "아직 실행 기록이 없습니다.",
@@ -365,6 +407,14 @@ const STR = {
     jobCancel: "Cancel", jobOutputs: "Outputs",
     chunkRetry: "failed · will retry", chunkGiveUp: "given up", chunkWait: "pending",
     confirmCancelJob: "Cancel this entire job?", toastJob: "Updated",
+    newJob: "+ New job", jobPlanning: "Planning", jobPlanFailed: "Planning failed",
+    planningNote: "Collecting inventory and splitting into chunks (1–2 min)…",
+    jfRequest: "What should be done? (a big request — it gets split into chunks)",
+    jfRequestPh: "e.g. Find every use of the deprecated API across the projects in this folder",
+    jfMaxChunks: "Max chunks", jfMinFive: "5-hour remaining ≥ %", jfMinWeekly: "Weekly remaining ≥ %",
+    jfHint: "When the plan is ready an approval card appears — nothing runs until you approve it.",
+    jfSubmit: "Start planning",
+    toastPlanStarted: "Planning started — the approval card will appear shortly",
     emptyWait: 'No tasks waiting. Use "+ New task" to schedule one.',
     emptyDone: "Nothing has run in this 5-hour window / this week.",
     emptyHist: "No runs yet.",
@@ -405,6 +455,7 @@ function applyStatic() {
   $("#fPrompt").placeholder = T.phPrompt;
   $("#fAddDir").placeholder = T.phAddDir;
   $("#fBudget").placeholder = T.phBudget;
+  $("#jfText").placeholder = T.jfRequestPh;
   $("#fDay").innerHTML = DAY_VALUES.map((v, i) => `<option value="${v}">${T.days[i]}</option>`).join("");
 }
 
@@ -498,6 +549,8 @@ function histCard(h) {
 }
 
 function jobBadge(j) {
+  if (j.status === "planning") return `<span class="badge wait">${T.jobPlanning}</span>`;
+  if (j.status === "plan_failed") return `<span class="badge error">${T.jobPlanFailed}</span>`;
   if (j.status === "awaiting_approval") return `<span class="badge budget_exceeded">${T.jobAwaiting}</span>`;
   if (j.status === "running" && j.quota_wait) return `<span class="badge wait">${T.jobQuotaWait}</span>`;
   if (j.status === "running") return `<span class="badge ready">${T.jobRunning}</span>`;
@@ -524,7 +577,18 @@ function chunkRow(c) {
 
 function jobCard(j) {
   const total = j.chunks.length;
-  const pct = Math.round(j.done / total * 100);
+  const pct = total ? Math.round(j.done / total * 100) : 0;
+  if (j.status === "planning" || j.status === "plan_failed") {
+    const note = j.status === "planning"
+      ? `<div class="reason">${T.planningNote}</div>`
+      : `<div class="reason" style="color:var(--red)">${esc(j.plan_error || "")}</div>`;
+    return `<div class="card">
+      <div class="row1"><div class="prompt">${esc(j.request)}</div>${jobBadge(j)}</div>
+      <div class="meta"><span>📁 <b>${esc(j.working_dir.split("/").slice(-2).join("/"))}</b></span></div>
+      ${note}
+      <div class="actions"><button class="danger-ghost small" onclick="jobAction('${j.id}','cancel', true)">${T.jobCancel}</button></div>
+    </div>`;
+  }
   let buttons = "";
   if (j.status === "awaiting_approval") {
     buttons = `<button class="small" style="background:var(--accent); border-color:var(--accent); color:#fff" onclick="jobAction('${j.id}','approve')">${T.jobApprove}</button>
@@ -585,6 +649,9 @@ function render() {
   document.querySelector("#jobsSec").style.display = jobs.length ? "" : "none";
   $("#cntJobs").textContent = jobs.length;
   $("#listJobs").innerHTML = jobs.map(jobCard).join("");
+  if (jobs.some(j => j.status === "planning") && !window._planPoll) {
+    window._planPoll = setTimeout(() => { window._planPoll = null; refresh(); }, 8000);
+  }
 
   const fired = state.tasks.filter(t => !t.eligible && t.fired);
   const waiting = state.tasks.filter(t => !fired.includes(t));
@@ -664,8 +731,32 @@ $("#fMode").addEventListener("click", e => {
   $("#fiveFields").style.display = mode === "five_hour" ? "grid" : "none";
   $("#weeklyFields").style.display = mode === "weekly" ? "grid" : "none";
 });
-$("#btnAdd").onclick = () => $("#addForm").classList.toggle("open");
+$("#btnAdd").onclick = () => { $("#addForm").classList.toggle("open"); $("#jobForm").style.display = "none"; };
 $("#btnCancel").onclick = () => $("#addForm").classList.remove("open");
+$("#btnAddJob").onclick = () => {
+  const f = $("#jobForm");
+  f.style.display = f.style.display === "none" ? "block" : "none";
+  $("#addForm").classList.remove("open");
+};
+$("#jfCancel").onclick = () => $("#jobForm").style.display = "none";
+$("#jfBrowse").onclick = () => pickFolder(p => $("#jfDir").value = p);
+$("#jfSubmit").onclick = async () => {
+  const res = await (await fetch("/api/plan", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      request: $("#jfText").value,
+      dir: $("#jfDir").value,
+      max_chunks: $("#jfMaxChunks").value,
+      min_five: $("#jfMinFive").value,
+      min_weekly: $("#jfMinWeekly").value,
+    }),
+  })).json();
+  if (!res.ok) { toast("⚠️ " + res.error); return; }
+  toast(T.toastPlanStarted);
+  $("#jobForm").style.display = "none";
+  $("#jfText").value = "";
+  refresh();
+};
 $("#btnSubmit").onclick = async () => {
   const payload = {
     prompt: $("#fPrompt").value,

@@ -87,7 +87,7 @@ def estimate_cost(chunks: list) -> tuple:
 
 def create_plan(request: str, working_dir: str, add_dirs=(), max_chunks: int = 12,
                 plan_model=None, synthesis_model=None,
-                min_five: float = 30.0, min_weekly: float = 40.0) -> dict:
+                min_five: float = 30.0, min_weekly: float = 40.0, job_id=None) -> dict:
     wd = str(Path(working_dir).expanduser().resolve())
 
     print(t("p.phase.inventory"))
@@ -110,7 +110,7 @@ def create_plan(request: str, working_dir: str, add_dirs=(), max_chunks: int = 1
     plan = _extract_json(str(plan_payload.get("result")))
     plan_cost = plan_payload.get("total_cost_usd") or 0
 
-    job_id = uuid.uuid4().hex[:8]
+    job_id = job_id or uuid.uuid4().hex[:8]
     out_dir = JOBS_DIR / job_id
 
     def _blank(idx, title, prompt, model, effort, synthesis, filename):
@@ -148,6 +148,8 @@ def create_plan(request: str, working_dir: str, add_dirs=(), max_chunks: int = 1
 
 
 STATUS_LABEL_KEYS = {
+    "planning": "j.st.planning",
+    "plan_failed": "j.st.plan_failed",
     "awaiting_approval": "j.st.awaiting",
     "running": "j.st.running",
     "paused": "j.st.paused",

@@ -145,6 +145,25 @@ def _recent_dirs() -> list:
     return out[:15]
 
 
+def _plan_in_background(job_id: str, request_text: str, wd: str, kwargs: dict) -> None:
+    import planner
+    try:
+        job = planner.create_plan(request_text, wd, job_id=job_id, **kwargs)
+    except Exception as e:
+        cur = store.get_job(job_id)
+        if cur and cur["status"] == "planning":
+            store.update_job(job_id, status="plan_failed", plan_error=str(e)[:200])
+        return
+    cur = store.get_job(job_id)
+    if not cur or cur["status"] != "planning":  # 계획 중 사용자가 취소한 경우
+        return
+    store.update_job(
+        job_id, status="awaiting_approval",
+        chunks=job["chunks"], output_dir=job["output_dir"],
+        total_cost=job["total_cost"], planning_cost=job["planning_cost"],
+    )
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):  # 액세스 로그로 스케줄러 로그가 오염되지 않도록
         pass
@@ -204,6 +223,53 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": True})
                 else:
                     self._json({"ok": False, "error": t("s.err.jobaction", a=action, s=job["status"])}, 400)
+            elif self.path == "/api/plan":
+                import uuid as uuid_mod
+
+                import planner
+                from wizard import MODEL_VALUES as _MV
+                p = self._read_body()
+                request_text = (p.get("request") or "").strip()
+                if not request_text:
+                    raise ValueError(t("a.err.prompt"))
+                wd = Path(p.get("dir") or "").expanduser()
+                if not wd.is_dir():
+                    raise ValueError(t("s.err.dir", d=wd))
+                add_dirs = []
+                for d in p.get("add_dirs") or []:
+                    pd = Path(d).expanduser()
+                    if not pd.is_dir():
+                        raise ValueError(t("s.err.adddir", d=d))
+                    add_dirs.append(str(pd.resolve()))
+                for key in ("plan_model", "synthesis_model"):
+                    if p.get(key) and p[key] not in _MV:
+                        raise ValueError(t("a.err.model", m=p[key]))
+
+                job_id = uuid_mod.uuid4().hex[:8]
+                min_five = float(p.get("min_five") or 30)
+                min_weekly = float(p.get("min_weekly") or 40)
+                store.add_job({
+                    "id": job_id, "request": request_text,
+                    "working_dir": str(wd.resolve()), "add_dirs": add_dirs,
+                    "status": "planning",
+                    "policy": {"min_five_hour_pct": min_five, "min_weekly_pct": min_weekly},
+                    "output_dir": str(planner.JOBS_DIR / job_id),
+                    "chunks": [],
+                    "created_at": datetime.now().isoformat(timespec="seconds"),
+                    "total_cost": 0, "planning_cost": 0,
+                })
+                kwargs = dict(
+                    add_dirs=add_dirs, max_chunks=int(p.get("max_chunks") or 12),
+                    plan_model=p.get("plan_model") or None,
+                    synthesis_model=p.get("synthesis_model") or None,
+                    min_five=min_five, min_weekly=min_weekly,
+                )
+                threading.Thread(
+                    target=_plan_in_background,
+                    args=(job_id, request_text, str(wd.resolve()), kwargs),
+                    daemon=True,
+                ).start()
+                self._json({"ok": True, "job_id": job_id})
             elif self.path == "/api/open-path":
                 import planner
                 p = self._read_body()
