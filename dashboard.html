@@ -367,7 +367,7 @@ const STR = {
     jobCostSoFar: c => `지금까지 $${c.toFixed(2)}`,
     jobApprove: "승인하고 시작", jobPause: "일시정지", jobResume: "재개",
     jobCancel: "중단", jobOutputs: "결과 폴더",
-    chunkRetry: "실패 · 재시도 예정", chunkGiveUp: "포기됨", chunkWait: "대기",
+    chunkRetry: "실패 · 재시도 예정", chunkGiveUp: "포기됨", chunkWait: "대기", chunkSession: "세션",
     confirmCancelJob: "이 작업 전체를 중단할까요?", toastJob: "반영되었습니다",
     newJob: "+ 새 플랜", jobPlanning: "계획 수립 중", jobPlanFailed: "계획 실패",
     planningNote: "인벤토리 수집과 청크 분해를 진행하고 있습니다 (1~2분)…",
@@ -434,7 +434,7 @@ const STR = {
     jobCostSoFar: c => `$${c.toFixed(2)} so far`,
     jobApprove: "Approve and start", jobPause: "Pause", jobResume: "Resume",
     jobCancel: "Cancel", jobOutputs: "Outputs",
-    chunkRetry: "failed · will retry", chunkGiveUp: "given up", chunkWait: "pending",
+    chunkRetry: "failed · will retry", chunkGiveUp: "given up", chunkWait: "pending", chunkSession: "session",
     confirmCancelJob: "Cancel this entire job?", toastJob: "Updated",
     newJob: "+ New plan", jobPlanning: "Planning", jobPlanFailed: "Planning failed",
     planningNote: "Collecting inventory and splitting into chunks (1–2 min)…",
@@ -590,7 +590,7 @@ function jobBadge(j) {
   return `<span class="badge error">${T.jobFailed}</span>`;
 }
 
-function chunkRow(c) {
+function chunkRow(c, j) {
   let icon = "·", note = T.chunkWait, color = "var(--muted)";
   if (c.status === "ok") { icon = "✓"; note = (c.cost != null ? "$" + c.cost.toFixed(2) : ""); color = "var(--green)"; }
   else if (c.status === "running") { icon = "▶"; note = "…"; color = "var(--accent)"; }
@@ -599,10 +599,13 @@ function chunkRow(c) {
     note = c.attempts >= 2 ? T.chunkGiveUp : T.chunkRetry;
   }
   const model = (c.model || T.modelDefault) + (c.effort ? "·" + c.effort : "");
+  const sessionBtn = c.session_id
+    ? `<button class="small" style="padding:2px 9px; font-size:11px;" onclick="openSession('${encodeURIComponent(j.working_dir)}','${c.session_id}')">${T.chunkSession}</button>`
+    : "";
   return `<div style="display:flex; align-items:center; gap:8px; padding:2px 0; font-size:12.5px; color:var(--muted);">
     <span style="color:${color}; width:14px; text-align:center;">${icon}</span>
     <span style="color:var(--text); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${String(c.idx).padStart(2,"0")}. ${esc(c.title)}</span>
-    <span>${esc(model)}</span><span style="min-width:70px; text-align:right;">${esc(note)}</span>
+    <span>${esc(model)}</span><span style="min-width:56px; text-align:right;">${esc(note)}</span>${sessionBtn}
   </div>`;
 }
 
@@ -647,7 +650,7 @@ function jobCard(j) {
       <div class="bar"><i style="width:${pct}%"></i></div>
     </div>
     <div style="border-top:1px solid var(--border); margin-top:11px; padding-top:8px;">
-      ${j.chunks.map(chunkRow).join("")}
+      ${j.chunks.map(c => chunkRow(c, j)).join("")}
     </div>
     <div class="actions">${buttons}</div>
   </div>`;
