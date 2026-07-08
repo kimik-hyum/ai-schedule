@@ -240,6 +240,7 @@ M = {
     "j.f.policy": ("    큐 정책: 5시간 잔여 ≥{f5:g}% + 위클리 잔여 ≥{f7:g}% 동안 실행",
                    "    Queue policy: run while 5-hour ≥{f5:g}% and weekly ≥{f7:g}% remain"),
     "j.f.policy.scoped": (" (+모델 전용 잔여 ≥{v:g}%)", " (+model-scoped ≥{v:g}%)"),
+    "j.f.policy.reset": (" (리셋 {v:g}시간 전부터만)", " (only within {v:g}h of reset)"),
     "j.f.progress": ("    진행: 청크 {d}/{n} 완료 (실패 {f}) · 누적 비용 ${c:.2f}",
                      "    Progress: {d}/{n} chunks done ({f} failed) · ${c:.2f} spent"),
     "j.f.outdir": ("    결과 폴더: {v}", "    Outputs: {v}"),

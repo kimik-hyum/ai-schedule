@@ -197,6 +197,10 @@
         <label data-i="jfMinScoped"></label>
         <input type="number" id="jfMinScoped" min="0" max="100">
       </div>
+      <div class="field">
+        <label data-i="jfBeforeReset"></label>
+        <input type="number" id="jfBeforeReset" min="0" max="5" step="0.5">
+      </div>
     </div>
     <p class="hint" data-i="jfHint"></p>
     <div class="form-actions">
@@ -354,7 +358,8 @@ const STR = {
     secJobs: "🧩 대형 작업 (Jobs)",
     jobAwaiting: "승인 대기", jobRunning: "실행 중", jobQuotaWait: "할당량 대기",
     jobPaused: "일시정지", jobDone: "완료", jobFailed: "실패",
-    jobPolicy: (f5, f7, sc) => `정책: 5시간 잔여 ≥${f5}% + 위클리 잔여 ≥${f7}% 동안 실행${sc != null ? ` (+모델 전용 ≥${sc}%)` : ""}`,
+    jobPolicy: (f5, f7, sc, br) => `정책: 5시간 잔여 ≥${f5}% + 위클리 잔여 ≥${f7}% 동안 실행${sc != null ? ` (+모델 전용 ≥${sc}%)` : ""}${br != null ? ` (리셋 ${br}시간 전부터만)` : ""}`,
+    jfBeforeReset: "리셋 몇 시간 전부터만 실행 (선택 — 비우면 항상)",
     scopedFieldLabel: n => `${n} 전용 위클리 잔여 ≥ % (선택)`,
     taskScoped: v => `모델 전용 ≥${v}%`,
     jfMinScoped: "모델 전용 잔여 ≥ % (선택 — Fable 등 전용 한도가 있는 모델 청크에 적용)",
@@ -420,7 +425,8 @@ const STR = {
     secJobs: "🧩 Jobs",
     jobAwaiting: "Awaiting approval", jobRunning: "Running", jobQuotaWait: "Waiting for quota",
     jobPaused: "Paused", jobDone: "Done", jobFailed: "Failed",
-    jobPolicy: (f5, f7, sc) => `Policy: run while 5-hour ≥${f5}% and weekly ≥${f7}% remain${sc != null ? ` (+model-scoped ≥${sc}%)` : ""}`,
+    jobPolicy: (f5, f7, sc, br) => `Policy: run while 5-hour ≥${f5}% and weekly ≥${f7}% remain${sc != null ? ` (+model-scoped ≥${sc}%)` : ""}${br != null ? ` (only within ${br}h of reset)` : ""}`,
+    jfBeforeReset: "Only within N hours of the reset (optional — empty = always)",
     scopedFieldLabel: n => `${n} scoped weekly remaining ≥ % (optional)`,
     taskScoped: v => `model-scoped ≥${v}%`,
     jfMinScoped: "Model-scoped remaining ≥ % (optional — applies to chunks on scoped models like Fable)",
@@ -633,7 +639,7 @@ function jobCard(j) {
     <div class="row1"><div class="prompt">${esc(j.request)}</div>${jobBadge(j)}</div>
     <div class="meta"><span>📁 <b>${esc(j.working_dir.split("/").slice(-2).join("/"))}</b></span>
       ${j.add_dirs && j.add_dirs.length ? `<span title="${esc(j.add_dirs.join("\n"))}">📂 ${T.addAccess(j.add_dirs.length)}</span>` : ""}
-      <span>⚙️ ${T.jobPolicy(j.policy.min_five_hour_pct, j.policy.min_weekly_pct, j.policy.min_scoped_pct)}</span></div>
+      <span>⚙️ ${T.jobPolicy(j.policy.min_five_hour_pct, j.policy.min_weekly_pct, j.policy.min_scoped_pct, j.policy.before_reset_hours)}</span></div>
     <div style="margin-top:11px;">
       <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:5px;">
         <span>${T.jobChunks(j.done, total)}</span><span>${T.jobCostSoFar(j.total_cost || 0)}</span>
@@ -813,6 +819,7 @@ $("#jfSubmit").onclick = async () => {
       min_five: $("#jfMinFive").value,
       min_weekly: $("#jfMinWeekly").value,
       min_scoped: $("#jfMinScoped").value,
+      before_reset: $("#jfBeforeReset").value,
     }),
   })).json();
   if (!res.ok) { toast("⚠️ " + res.error); return; }

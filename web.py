@@ -255,12 +255,13 @@ class Handler(BaseHTTPRequestHandler):
                 min_five = float(p.get("min_five") or 30)
                 min_weekly = float(p.get("min_weekly") or 40)
                 min_scoped = float(p["min_scoped"]) if p.get("min_scoped") not in (None, "") else None
+                before_reset = float(p["before_reset"]) if p.get("before_reset") not in (None, "") else None
                 store.add_job({
                     "id": job_id, "request": request_text,
                     "working_dir": str(wd.resolve()), "add_dirs": add_dirs,
                     "status": "planning",
                     "policy": {"min_five_hour_pct": min_five, "min_weekly_pct": min_weekly,
-                               "min_scoped_pct": min_scoped},
+                               "min_scoped_pct": min_scoped, "before_reset_hours": before_reset},
                     "output_dir": str(planner.JOBS_DIR / job_id),
                     "chunks": [],
                     "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -271,6 +272,7 @@ class Handler(BaseHTTPRequestHandler):
                     plan_model=p.get("plan_model") or None,
                     synthesis_model=p.get("synthesis_model") or None,
                     min_five=min_five, min_weekly=min_weekly, min_scoped=min_scoped,
+                    before_reset=before_reset,
                 )
                 threading.Thread(
                     target=_plan_in_background,

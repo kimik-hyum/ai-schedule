@@ -105,7 +105,7 @@ def cmd_plan(args):
             max_chunks=args.max_chunks, plan_model=args.plan_model,
             synthesis_model=args.synthesis_model,
             min_five=args.min_five, min_weekly=args.min_weekly,
-            min_scoped=args.min_scoped,
+            min_scoped=args.min_scoped, before_reset=args.before_reset,
         )
     except Exception as e:
         sys.exit(t("p.err.fail", e=e))
@@ -226,6 +226,8 @@ def main():
     p_plan.add_argument("--min-five", type=float, default=30, dest="min_five")
     p_plan.add_argument("--min-weekly", type=float, default=40, dest="min_weekly")
     p_plan.add_argument("--min-scoped", type=float, dest="min_scoped")
+    p_plan.add_argument("--before-reset", type=float, dest="before_reset",
+                        help="5시간 리셋 N시간 전부터만 청크 실행 (생략 시 항상)")
     p_plan.add_argument("--yes", action="store_true")
     p_plan.set_defaults(func=cmd_plan)
 

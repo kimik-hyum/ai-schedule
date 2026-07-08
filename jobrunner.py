@@ -38,8 +38,16 @@ Write the final report as Markdown to this exact file: {out}"""
 
 def _policy_ok(job: dict, u) -> bool:
     p = job["policy"]
-    return (u.five_hour.remaining_pct >= p["min_five_hour_pct"]
-            and u.seven_day.remaining_pct >= p["min_weekly_pct"])
+    if not (u.five_hour.remaining_pct >= p["min_five_hour_pct"]
+            and u.seven_day.remaining_pct >= p["min_weekly_pct"]):
+        return False
+    # 선택 조건: 5시간 리셋이 N시간 이내로 다가온 동안만 실행 (남는 할당량 소진용)
+    before = p.get("before_reset_hours")
+    if before is not None:
+        hours_left = u.five_hour.seconds_to_reset / 3600
+        if hours_left <= 0 or hours_left > before:
+            return False
+    return True
 
 
 def _terminal_failed(c: dict) -> bool:
