@@ -171,6 +171,15 @@
         <button type="button" class="small" id="jfBrowse" data-i="btnFinder"></button>
       </div>
     </div>
+    <div class="field">
+      <label data-i="flAddDirs"></label>
+      <div class="dir-row">
+        <input type="text" id="jfAddDir">
+        <button type="button" class="small" id="jfAddDirBtn" data-i="btnAddDir"></button>
+        <button type="button" class="small" id="jfFinderAdd">📂</button>
+      </div>
+      <div class="chips" id="jfAddDirChips"></div>
+    </div>
     <div class="grid2">
       <div class="field">
         <label data-i="jfMaxChunks"></label>
@@ -470,6 +479,7 @@ function applyStatic() {
   $("#fAddDir").placeholder = T.phAddDir;
   $("#fBudget").placeholder = T.phBudget;
   $("#jfText").placeholder = T.jfRequestPh;
+  $("#jfAddDir").placeholder = T.phAddDir;
   $("#fDay").innerHTML = DAY_VALUES.map((v, i) => `<option value="${v}">${T.days[i]}</option>`).join("");
 }
 
@@ -622,6 +632,7 @@ function jobCard(j) {
   return `<div class="card">
     <div class="row1"><div class="prompt">${esc(j.request)}</div>${jobBadge(j)}</div>
     <div class="meta"><span>📁 <b>${esc(j.working_dir.split("/").slice(-2).join("/"))}</b></span>
+      ${j.add_dirs && j.add_dirs.length ? `<span title="${esc(j.add_dirs.join("\n"))}">📂 ${T.addAccess(j.add_dirs.length)}</span>` : ""}
       <span>⚙️ ${T.jobPolicy(j.policy.min_five_hour_pct, j.policy.min_weekly_pct, j.policy.min_scoped_pct)}</span></div>
     <div style="margin-top:11px;">
       <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:5px;">
@@ -745,10 +756,11 @@ function updateScopedField() {
 $("#fModel").addEventListener("change", updateScopedField);
 
 $("#btnFinder").onclick = () => pickFolder(p => $("#fDir").value = p);
-$("#btnFinderAdd").onclick = () => pickFolder(p => { addDirs.push(p); renderChips(); });
+$("#btnFinderAdd").onclick = () => pickFolder(p => { if (!addDirs.includes(p)) addDirs.push(p); renderChips(); });
 $("#btnAddDir").onclick = () => {
   const v = $("#fAddDir").value.trim();
-  if (v) { addDirs.push(v); $("#fAddDir").value = ""; renderChips(); }
+  if (v && !addDirs.includes(v)) { addDirs.push(v); renderChips(); }
+  $("#fAddDir").value = "";
 };
 $("#btnRecent").onclick = async () => {
   const menu = $("#recentMenu");
@@ -777,12 +789,26 @@ $("#btnAddJob").onclick = () => {
 };
 $("#jfCancel").onclick = () => $("#jobForm").style.display = "none";
 $("#jfBrowse").onclick = () => pickFolder(p => $("#jfDir").value = p);
+
+let jobAddDirs = [];
+function renderJobChips() {
+  $("#jfAddDirChips").innerHTML = jobAddDirs.map((d, i) =>
+    `<span class="chip">${esc(d.split("/").slice(-2).join("/"))}<button class="x" onclick="jobAddDirs.splice(${i},1);renderJobChips()">✕</button></span>`
+  ).join("");
+}
+$("#jfAddDirBtn").onclick = () => {
+  const v = $("#jfAddDir").value.trim();
+  if (v && !jobAddDirs.includes(v)) { jobAddDirs.push(v); renderJobChips(); }
+  $("#jfAddDir").value = "";
+};
+$("#jfFinderAdd").onclick = () => pickFolder(p => { if (!jobAddDirs.includes(p)) jobAddDirs.push(p); renderJobChips(); });
 $("#jfSubmit").onclick = async () => {
   const res = await (await fetch("/api/plan", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       request: $("#jfText").value,
       dir: $("#jfDir").value,
+      add_dirs: jobAddDirs,
       max_chunks: $("#jfMaxChunks").value,
       min_five: $("#jfMinFive").value,
       min_weekly: $("#jfMinWeekly").value,
@@ -793,6 +819,8 @@ $("#jfSubmit").onclick = async () => {
   toast(T.toastPlanStarted);
   $("#jobForm").style.display = "none";
   $("#jfText").value = "";
+  jobAddDirs = [];
+  renderJobChips();
   refresh();
 };
 $("#btnSubmit").onclick = async () => {
