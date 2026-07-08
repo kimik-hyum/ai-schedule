@@ -198,6 +198,8 @@ M = {
     "s.err.adddir": ("추가 폴더가 존재하지 않습니다: {d}", "Additional folder does not exist: {d}"),
     "s.usage.5h": ("5시간: 사용 {u:.0f}% / 잔여 {r:.0f}% (리셋 {t})", "5-hour: used {u:.0f}% / left {r:.0f}% (resets {t})"),
     "s.usage.7d": ("위클리: 사용 {u:.0f}% / 잔여 {r:.0f}% (리셋 {t})", "Weekly: used {u:.0f}% / left {r:.0f}% (resets {t})"),
+    "s.usage.scoped": ("{n} 전용 위클리: 사용 {u:.0f}% / 잔여 {r:.0f}% (리셋 {t})",
+                       "{n} weekly (model-scoped): used {u:.0f}% / left {r:.0f}% (resets {t})"),
     "s.removed": ("삭제됨: {id}", "Removed: {id}"),
     "s.notfound": ("해당 id를 찾을 수 없습니다: {id}", "No such id: {id}"),
     "s.nolist": ("등록된 예약이 없습니다.", "No scheduled tasks."),

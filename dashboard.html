@@ -279,7 +279,7 @@
   </div>
 
   <section id="usageSec" style="margin-top:22px">
-    <div class="gauges">
+    <div class="gauges" id="gaugesRow">
       <div class="gauge" id="g5"></div>
       <div class="gauge" id="g7"></div>
     </div>
@@ -322,7 +322,7 @@ const STR = {
     daemonOn: p => `자동 실행 중 (pid ${p})`,
     daemonOff: "자동 실행 꺼짐 — 터미널에서 start 필요",
     serverLost: "서버 연결 끊김",
-    g5: "5시간 할당량", g7: "위클리 할당량", pctLeft: "% 남음",
+    g5: "5시간 할당량", g7: "위클리 할당량", gScoped: n => `${n} 전용 위클리`, pctLeft: "% 남음",
     usageFail: "사용량 조회 실패", resetDone: "리셋됨",
     resetIn: (d, h, m) => d ? `${d}일 ${h}시간 후 리셋` : (h ? `${h}시간 ${m}분 후 리셋` : `${m}분 후 리셋`),
     dur: (h, m, s) => h ? `${h}시간 ${m}분` : (m ? `${m}분 ${s}초` : `${s}초`),
@@ -385,7 +385,7 @@ const STR = {
     daemonOn: p => `Auto-run on (pid ${p})`,
     daemonOff: "Auto-run off — run start in a terminal",
     serverLost: "Server disconnected",
-    g5: "5-hour quota", g7: "Weekly quota", pctLeft: "% left",
+    g5: "5-hour quota", g7: "Weekly quota", gScoped: n => `${n} weekly (scoped)`, pctLeft: "% left",
     usageFail: "Failed to fetch usage", resetDone: "Reset",
     resetIn: (d, h, m) => d ? `resets in ${d}d ${h}h` : (h ? `resets in ${h}h ${m}m` : `resets in ${m}m`),
     dur: (h, m, s) => h ? `${h}h ${m}m` : (m ? `${m}m ${s}s` : `${s}s`),
@@ -644,6 +644,13 @@ function render() {
 
   gauge($("#g5"), T.g5, state.usage && state.usage.five_hour);
   gauge($("#g7"), T.g7, state.usage && state.usage.seven_day);
+  document.querySelectorAll("#gaugesRow .gauge.scoped").forEach(el => el.remove());
+  for (const s of (state.usage && state.usage.scoped) || []) {
+    const el = document.createElement("div");
+    el.className = "gauge scoped";
+    $("#gaugesRow").appendChild(el);
+    gauge(el, T.gScoped(s.name), s);
+  }
 
   const jobs = state.jobs || [];
   document.querySelector("#jobsSec").style.display = jobs.length ? "" : "none";

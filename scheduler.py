@@ -190,6 +190,9 @@ def cmd_usage(_args):
             t=u.five_hour.resets_at.astimezone().strftime("%Y-%m-%d %H:%M")))
     print(t("s.usage.7d", u=u.seven_day.utilization, r=u.seven_day.remaining_pct,
             t=u.seven_day.resets_at.astimezone().strftime("%Y-%m-%d %H:%M")))
+    for s in u.scoped or []:
+        print(t("s.usage.scoped", n=s.name, u=s.utilization, r=s.remaining_pct,
+                t=s.resets_at.astimezone().strftime("%Y-%m-%d %H:%M")))
 
 
 def main():

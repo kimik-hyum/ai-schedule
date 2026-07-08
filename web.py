@@ -49,6 +49,10 @@ def _state() -> dict:
         usage_out = {
             "five_hour": {"remaining_pct": u.five_hour.remaining_pct, "resets_at": u.five_hour.resets_at.isoformat()},
             "seven_day": {"remaining_pct": u.seven_day.remaining_pct, "resets_at": u.seven_day.resets_at.isoformat()},
+            "scoped": [
+                {"name": s.name, "remaining_pct": s.remaining_pct, "resets_at": s.resets_at.isoformat()}
+                for s in (u.scoped or [])
+            ],
         }
 
     jobs_out = []

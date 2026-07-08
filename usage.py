@@ -43,9 +43,21 @@ class WindowUsage:
 
 
 @dataclass
+class ScopedUsage:
+    name: str  # 예: "Fable" — 모델 전용 위클리 한도
+    utilization: float
+    resets_at: datetime
+
+    @property
+    def remaining_pct(self) -> float:
+        return 100.0 - self.utilization
+
+
+@dataclass
 class Usage:
     five_hour: WindowUsage
     seven_day: WindowUsage
+    scoped: list = None  # 모델별 위클리 한도 목록 (없으면 빈 리스트)
 
 
 def fetch_usage() -> Usage:
@@ -71,7 +83,23 @@ def fetch_usage() -> Usage:
         w = data[key]
         return WindowUsage(utilization=w["utilization"], resets_at=datetime.fromisoformat(w["resets_at"]))
 
-    return Usage(five_hour=parse("five_hour"), seven_day=parse("seven_day"))
+    scoped = []
+    for lim in data.get("limits") or []:
+        try:
+            if lim.get("kind") != "weekly_scoped":
+                continue
+            name = ((lim.get("scope") or {}).get("model") or {}).get("display_name")
+            if not name:
+                continue
+            scoped.append(ScopedUsage(
+                name=name,
+                utilization=float(lim["percent"]),
+                resets_at=datetime.fromisoformat(lim["resets_at"]),
+            ))
+        except (KeyError, TypeError, ValueError):
+            continue  # 비공식 스키마 — 항목 하나가 이상해도 전체 조회는 살린다
+
+    return Usage(five_hour=parse("five_hour"), seven_day=parse("seven_day"), scoped=scoped)
 
 
 def resolve_claude_binary() -> str:
