@@ -58,15 +58,32 @@ def check_weekly(task: dict, u: "usage_mod.Usage", now: datetime):
     return True, t("r.w.met", r=remaining, d=day_name(target_weekday), t=cond["time"])
 
 
+def _check_scoped(task: dict, u: "usage_mod.Usage"):
+    """모델 전용 한도(예: Fable 위클리) 조건. 미설정이거나 해당 모델에 전용 한도가 없으면 통과."""
+    threshold = task.get("min_scoped_pct")
+    if threshold is None:
+        return True, None
+    s = usage_mod.scoped_for_model(u, task.get("model"))
+    if not s:
+        return True, None
+    if s.remaining_pct < threshold:
+        return False, t("r.scoped.low", n=s.name, r=s.remaining_pct, m=threshold)
+    return True, None
+
+
 def evaluate_task(task: dict, u: "usage_mod.Usage", now: datetime):
     """예약의 현재 상태 평가. (kind, ok, reason) — 웹 UI와 run_once가 공용."""
     if task.get("five_hour"):
-        ok, reason = check_five_hour(task, u)
-        return "five_hour", ok, reason
-    if task.get("weekly"):
-        ok, reason = check_weekly(task, u, now)
-        return "weekly", ok, reason
-    return None, False, t("r.cond.unset")
+        kind, (ok, reason) = "five_hour", check_five_hour(task, u)
+    elif task.get("weekly"):
+        kind, (ok, reason) = "weekly", check_weekly(task, u, now)
+    else:
+        return None, False, t("r.cond.unset")
+    if ok:
+        scoped_ok, scoped_reason = _check_scoped(task, u)
+        if not scoped_ok:
+            return kind, False, scoped_reason
+    return kind, ok, reason
 
 
 def execute_task(task: dict) -> dict:

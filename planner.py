@@ -87,7 +87,8 @@ def estimate_cost(chunks: list) -> tuple:
 
 def create_plan(request: str, working_dir: str, add_dirs=(), max_chunks: int = 12,
                 plan_model=None, synthesis_model=None,
-                min_five: float = 30.0, min_weekly: float = 40.0, job_id=None) -> dict:
+                min_five: float = 30.0, min_weekly: float = 40.0,
+                min_scoped=None, job_id=None) -> dict:
     wd = str(Path(working_dir).expanduser().resolve())
 
     print(t("p.phase.inventory"))
@@ -138,7 +139,7 @@ def create_plan(request: str, working_dir: str, add_dirs=(), max_chunks: int = 1
         "working_dir": wd,
         "add_dirs": list(add_dirs),
         "status": "awaiting_approval",
-        "policy": {"min_five_hour_pct": min_five, "min_weekly_pct": min_weekly},
+        "policy": {"min_five_hour_pct": min_five, "min_weekly_pct": min_weekly, "min_scoped_pct": min_scoped},
         "output_dir": str(out_dir),
         "chunks": chunks,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -168,7 +169,10 @@ def format_job(job: dict) -> str:
     lines.append(t("f.dir", v=job["working_dir"]))
     if job.get("add_dirs"):
         lines.append(t("f.adddirs", v=", ".join(job["add_dirs"])))
-    lines.append(t("j.f.policy", f5=job["policy"]["min_five_hour_pct"], f7=job["policy"]["min_weekly_pct"]))
+    policy_line = t("j.f.policy", f5=job["policy"]["min_five_hour_pct"], f7=job["policy"]["min_weekly_pct"])
+    if job["policy"].get("min_scoped_pct") is not None:
+        policy_line += t("j.f.policy.scoped", v=job["policy"]["min_scoped_pct"])
+    lines.append(policy_line)
     lines.append(t("j.f.progress", d=done, n=len(chunks), f=failed, c=job.get("total_cost") or 0))
     lines.append(t("j.f.outdir", v=job["output_dir"]))
     for c in chunks:

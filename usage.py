@@ -102,6 +102,16 @@ def fetch_usage() -> Usage:
     return Usage(five_hour=parse("five_hour"), seven_day=parse("seven_day"), scoped=scoped)
 
 
+def scoped_for_model(u: Usage, model: str):
+    """모델 별칭(fable 등)에 해당하는 모델 전용 한도를 찾는다. 없으면 None."""
+    if not model:
+        return None
+    for s in u.scoped or []:
+        if s.name.lower() == model.lower():
+            return s
+    return None
+
+
 def resolve_claude_binary() -> str:
     path = shutil.which("claude")
     if path:

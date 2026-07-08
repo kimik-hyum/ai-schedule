@@ -38,7 +38,7 @@ def get_task(task_id: str):
 
 
 def add_task(prompt: str, working_dir: str, five_hour=None, weekly=None, model=None,
-             effort=None, max_budget_usd=None, add_dirs=None) -> dict:
+             effort=None, max_budget_usd=None, add_dirs=None, min_scoped_pct=None) -> dict:
     task = {
         "id": uuid.uuid4().hex[:8],
         "prompt": prompt,
@@ -49,6 +49,7 @@ def add_task(prompt: str, working_dir: str, five_hour=None, weekly=None, model=N
         "model": model,
         "effort": effort,
         "max_budget_usd": max_budget_usd,
+        "min_scoped_pct": min_scoped_pct,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "last_session_id": None,
         "last_fired": {"five_hour_reset": None, "weekly_key": None},

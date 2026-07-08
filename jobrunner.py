@@ -46,20 +46,35 @@ def _terminal_failed(c: dict) -> bool:
     return c["status"] == "failed" and c["attempts"] >= MAX_ATTEMPTS
 
 
-def _next_chunk(job: dict, tried: set):
+def _scope_blocked(job: dict, c: dict, u) -> bool:
+    """청크의 모델에 전용 한도(예: Fable 위클리)가 있고 정책 임계값 미만이면 이번 라운드 건너뜀."""
+    threshold = job["policy"].get("min_scoped_pct")
+    if threshold is None or not c.get("model"):
+        return False
+    s = usage_mod.scoped_for_model(u, c["model"])
+    return bool(s and s.remaining_pct < threshold)
+
+
+def _runnable(c: dict) -> bool:
+    return c["status"] == "pending" or (c["status"] == "failed" and c["attempts"] < MAX_ATTEMPTS)
+
+
+def _next_chunk(job: dict, tried: set, u):
     normal = [c for c in job["chunks"] if not c.get("synthesis")]
     for c in normal:
-        if c["idx"] in tried:
+        if c["idx"] in tried or not _runnable(c) or _scope_blocked(job, c, u):
             continue
-        if c["status"] == "pending" or (c["status"] == "failed" and c["attempts"] < MAX_ATTEMPTS):
-            return c
+        return c
     # 일반 청크가 모두 종결(성공 또는 포기)됐을 때만 종합 청크 실행
     if all(c["status"] == "ok" or _terminal_failed(c) for c in normal):
         for c in job["chunks"]:
-            if c.get("synthesis") and c["idx"] not in tried:
-                if c["status"] == "pending" or (c["status"] == "failed" and c["attempts"] < MAX_ATTEMPTS):
-                    return c
+            if c.get("synthesis") and c["idx"] not in tried and _runnable(c) and not _scope_blocked(job, c, u):
+                return c
     return None
+
+
+def _any_scope_blocked(job: dict, u) -> bool:
+    return any(_runnable(c) and _scope_blocked(job, c, u) for c in job["chunks"])
 
 
 def _build_prompt(job: dict, chunk: dict) -> str:
@@ -145,8 +160,10 @@ def _process_one(job_id: str) -> None:
         if not _policy_ok(job, u):
             quota_paused = True
             break
-        chunk = _next_chunk(job, tried)
+        chunk = _next_chunk(job, tried, u)
         if chunk is None:
+            if _any_scope_blocked(job, u):
+                quota_paused = True  # 모델 전용 한도 부족 — 다음 윈도우에 재시도
             break
         tried.add(chunk["idx"])
         res = execute_chunk(job, chunk)

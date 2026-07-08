@@ -57,7 +57,7 @@ def cmd_add(args):
     task = store.add_task(
         prompt=args.prompt, working_dir=str(wd), add_dirs=add_dirs,
         five_hour=five_hour, weekly=weekly, model=args.model, effort=args.effort,
-        max_budget_usd=args.budget,
+        max_budget_usd=args.budget, min_scoped_pct=args.min_scoped,
     )
     print(t("w.done"))
     print(wizard.format_task(task))
@@ -105,6 +105,7 @@ def cmd_plan(args):
             max_chunks=args.max_chunks, plan_model=args.plan_model,
             synthesis_model=args.synthesis_model,
             min_five=args.min_five, min_weekly=args.min_weekly,
+            min_scoped=args.min_scoped,
         )
     except Exception as e:
         sys.exit(t("p.err.fail", e=e))
@@ -211,6 +212,8 @@ def main():
     p_add.add_argument("--model", choices=wizard.MODEL_VALUES)
     p_add.add_argument("--effort", choices=wizard.EFFORT_VALUES)
     p_add.add_argument("--budget", type=float)
+    p_add.add_argument("--min-scoped", type=float, dest="min_scoped",
+                       help="모델 전용 위클리(예: Fable) 잔여 퍼센트 조건")
     p_add.set_defaults(func=cmd_add)
 
     p_plan = sub.add_parser("plan", help=t("s.h.plan"))
@@ -222,6 +225,7 @@ def main():
     p_plan.add_argument("--synthesis-model", choices=wizard.MODEL_VALUES, dest="synthesis_model")
     p_plan.add_argument("--min-five", type=float, default=30, dest="min_five")
     p_plan.add_argument("--min-weekly", type=float, default=40, dest="min_weekly")
+    p_plan.add_argument("--min-scoped", type=float, dest="min_scoped")
     p_plan.add_argument("--yes", action="store_true")
     p_plan.set_defaults(func=cmd_plan)
 

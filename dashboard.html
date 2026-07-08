@@ -184,6 +184,10 @@
         <label data-i="jfMinWeekly"></label>
         <input type="number" id="jfMinWeekly" value="40" min="0" max="100">
       </div>
+      <div class="field">
+        <label data-i="jfMinScoped"></label>
+        <input type="number" id="jfMinScoped" min="0" max="100">
+      </div>
     </div>
     <p class="hint" data-i="jfHint"></p>
     <div class="form-actions">
@@ -271,6 +275,10 @@
         <label data-i="flBudget"></label>
         <input type="number" id="fBudget" min="0" step="0.5">
       </div>
+      <div class="field" id="fScopedWrap" style="display:none">
+        <label id="fScopedLabel"></label>
+        <input type="number" id="fMinScoped" min="0" max="100">
+      </div>
     </div>
     <div class="form-actions">
       <button id="btnCancel" data-i="cancel"></button>
@@ -337,7 +345,10 @@ const STR = {
     secJobs: "🧩 대형 작업 (Jobs)",
     jobAwaiting: "승인 대기", jobRunning: "실행 중", jobQuotaWait: "할당량 대기",
     jobPaused: "일시정지", jobDone: "완료", jobFailed: "실패",
-    jobPolicy: (f5, f7) => `정책: 5시간 잔여 ≥${f5}% + 위클리 잔여 ≥${f7}% 동안 실행`,
+    jobPolicy: (f5, f7, sc) => `정책: 5시간 잔여 ≥${f5}% + 위클리 잔여 ≥${f7}% 동안 실행${sc != null ? ` (+모델 전용 ≥${sc}%)` : ""}`,
+    scopedFieldLabel: n => `${n} 전용 위클리 잔여 ≥ % (선택)`,
+    taskScoped: v => `모델 전용 ≥${v}%`,
+    jfMinScoped: "모델 전용 잔여 ≥ % (선택 — Fable 등 전용 한도가 있는 모델 청크에 적용)",
     jobChunks: (d, n) => `청크 ${d}/${n} 완료`,
     jobCostSoFar: c => `지금까지 $${c.toFixed(2)}`,
     jobApprove: "승인하고 시작", jobPause: "일시정지", jobResume: "재개",
@@ -400,7 +411,10 @@ const STR = {
     secJobs: "🧩 Jobs",
     jobAwaiting: "Awaiting approval", jobRunning: "Running", jobQuotaWait: "Waiting for quota",
     jobPaused: "Paused", jobDone: "Done", jobFailed: "Failed",
-    jobPolicy: (f5, f7) => `Policy: run while 5-hour ≥${f5}% and weekly ≥${f7}% remain`,
+    jobPolicy: (f5, f7, sc) => `Policy: run while 5-hour ≥${f5}% and weekly ≥${f7}% remain${sc != null ? ` (+model-scoped ≥${sc}%)` : ""}`,
+    scopedFieldLabel: n => `${n} scoped weekly remaining ≥ % (optional)`,
+    taskScoped: v => `model-scoped ≥${v}%`,
+    jfMinScoped: "Model-scoped remaining ≥ % (optional — applies to chunks on scoped models like Fable)",
     jobChunks: (d, n) => `${d}/${n} chunks done`,
     jobCostSoFar: c => `$${c.toFixed(2)} so far`,
     jobApprove: "Approve and start", jobPause: "Pause", jobResume: "Resume",
@@ -520,6 +534,7 @@ function taskCard(t) {
       ${t.add_dirs && t.add_dirs.length ? `<span title="${esc(t.add_dirs.join("\n"))}">📂 ${T.addAccess(t.add_dirs.length)}</span>` : ""}
       <span>⚙️ ${condText(t)}</span>
       <span>🤖 ${t.model || T.modelDefault}${t.effort ? " · " + t.effort : ""}</span>
+      ${t.min_scoped_pct != null ? `<span>🎯 ${T.taskScoped(t.min_scoped_pct)}</span>` : ""}
       <span>💰 ${t.max_budget_usd ? "$" + t.max_budget_usd : T.unlimited}</span>
     </div>
     <div class="reason ${t.eligible ? "ready" : ""}">${esc(t.reason)}</div>
@@ -607,7 +622,7 @@ function jobCard(j) {
   return `<div class="card">
     <div class="row1"><div class="prompt">${esc(j.request)}</div>${jobBadge(j)}</div>
     <div class="meta"><span>📁 <b>${esc(j.working_dir.split("/").slice(-2).join("/"))}</b></span>
-      <span>⚙️ ${T.jobPolicy(j.policy.min_five_hour_pct, j.policy.min_weekly_pct)}</span></div>
+      <span>⚙️ ${T.jobPolicy(j.policy.min_five_hour_pct, j.policy.min_weekly_pct, j.policy.min_scoped_pct)}</span></div>
     <div style="margin-top:11px;">
       <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:5px;">
         <span>${T.jobChunks(j.done, total)}</span><span>${T.jobCostSoFar(j.total_cost || 0)}</span>
@@ -714,6 +729,21 @@ async function pickFolder(cb) {
   } catch { toast("⚠️ " + T.toastPickFail); }
 }
 
+function updateScopedField() {
+  const m = $("#fModel").value;
+  const s = ((state && state.usage && state.usage.scoped) || [])
+    .find(x => m && x.name.toLowerCase() === m.toLowerCase());
+  const wrap = $("#fScopedWrap");
+  if (s) {
+    $("#fScopedLabel").textContent = T.scopedFieldLabel(s.name);
+    wrap.style.display = "";
+  } else {
+    wrap.style.display = "none";
+    $("#fMinScoped").value = "";
+  }
+}
+$("#fModel").addEventListener("change", updateScopedField);
+
 $("#btnFinder").onclick = () => pickFolder(p => $("#fDir").value = p);
 $("#btnFinderAdd").onclick = () => pickFolder(p => { addDirs.push(p); renderChips(); });
 $("#btnAddDir").onclick = () => {
@@ -756,6 +786,7 @@ $("#jfSubmit").onclick = async () => {
       max_chunks: $("#jfMaxChunks").value,
       min_five: $("#jfMinFive").value,
       min_weekly: $("#jfMinWeekly").value,
+      min_scoped: $("#jfMinScoped").value,
     }),
   })).json();
   if (!res.ok) { toast("⚠️ " + res.error); return; }
@@ -777,6 +808,7 @@ $("#btnSubmit").onclick = async () => {
     model: $("#fModel").value,
     effort: $("#fEffort").value,
     budget: $("#fBudget").value,
+    min_scoped: $("#fMinScoped").value,
   };
   const res = await (await fetch("/api/tasks", {
     method: "POST", headers: { "Content-Type": "application/json" },

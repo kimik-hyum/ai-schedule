@@ -111,6 +111,30 @@ def _ask_effort():
     return EFFORT_CHOICES[idx][0]
 
 
+def _ask_min_scoped(model):
+    """선택한 모델에 전용 위클리 한도(예: Fable)가 있을 때만 조건을 물어본다."""
+    if not model:
+        return None
+    try:
+        import usage as usage_mod
+        s = usage_mod.scoped_for_model(usage_mod.fetch_usage(), model)
+    except Exception:
+        return None
+    if not s:
+        return None
+    while True:
+        raw = _ask(t("w.ask.scoped", n=s.name))
+        if not raw:
+            return None
+        try:
+            val = float(raw)
+            if 0 <= val <= 100:
+                return val
+        except ValueError:
+            pass
+        print(t("w.range", lo=0, hi=100))
+
+
 def _ask_budget():
     while True:
         raw = _ask(t("w.ask.budget"))
@@ -156,6 +180,8 @@ def format_task(task: dict) -> str:
     lines.append(t("f.model", v=model or t("f.model.default")))
     if task.get("effort"):
         lines.append(t("f.effort", v=task["effort"]))
+    if task.get("min_scoped_pct") is not None:
+        lines.append(t("f.scoped", v=task["min_scoped_pct"]))
     budget = task.get("max_budget_usd")
     lines.append(t("f.budget", v=budget) if budget else t("f.budget.none"))
     lines.append(t("f.session", v=task.get("last_session_id") or t("f.session.none")))
@@ -185,11 +211,13 @@ def run_wizard() -> None:
     prompt = _ask_prompt()
     model = _ask_model()
     effort = _ask_effort()
+    min_scoped = _ask_min_scoped(model)
     max_budget = _ask_budget()
 
     task = store.add_task(
         prompt=prompt, working_dir=working_dir, add_dirs=add_dirs,
-        five_hour=five_hour, weekly=weekly, model=model, effort=effort, max_budget_usd=max_budget,
+        five_hour=five_hour, weekly=weekly, model=model, effort=effort,
+        max_budget_usd=max_budget, min_scoped_pct=min_scoped,
     )
 
     print("\n" + t("w.done"))
